@@ -1,65 +1,74 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client'; 
+import React, { useState, useEffect } from 'react';
+import { Header } from '@/components/layouts/Header';
+import { Footer } from '@/components/layouts/Footer'; // Import Footer
+import { BannerSlider } from '@/components/home/BannerSlider';
+import { SearchBar } from '@/components/home/SearchBar';
+import { ProductList } from '@/components/home/ProductList'; // Import ProductList
+import { Gallery } from '@/components/home/Gallery';     // Import Gallery
+import { Promotions } from '@/components/home/Promotions'; // Import Promotions
+import { useTranslation } from '@/hooks/useTranslation';
 
-export default function Home() {
+// Đường dẫn logo
+const LOGO_LIGHT = '/logos/agri-logo-light.png'; 
+const LOGO_DARK = '/logos/agri-logo-dark.png';  
+
+export default function HomePage() {
+  const { t } = useTranslation();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [logoSrc, setLogoSrc] = useState(LOGO_LIGHT);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY;
+      if (scrollPosition > 50) { 
+        setIsScrolled(true);
+        setLogoSrc(LOGO_DARK); 
+      } else {
+        setIsScrolled(false);
+        setLogoSrc(LOGO_LIGHT); 
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="font-sans antialiased">
+      <Header isScrolled={isScrolled} logoSrc={logoSrc} />
+
+      <main>
+        {/* Phần 1: Banner & Search (Giống dự án khách sạn) */}
+        <section className="relative">
+          <BannerSlider />
+          <div className="absolute inset-x-0 bottom-10 sm:bottom-20 z-10 px-4">
+             <SearchBar />
+             <div className="text-center mt-6">
+                 <button className="bg-white/90 text-green-700 font-semibold px-8 py-3 rounded-full shadow-md hover:bg-white transition-colors text-sm uppercase tracking-wide">
+                     {t('explore')}
+                 </button>
+             </div>
+          </div>
+           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/50 to-transparent"></div>
+        </section>
+
+        {/* Phần 2: Danh sách Sản phẩm (Clone từ BranchList) */}
+        <ProductList />
+
+        {/* Phần 3: Quảng cáo/Ưu đãi (Clone từ Advertisement) */}
+        <Promotions />
+
+        {/* Phần 4: Bộ sưu tập ảnh (Clone từ Gallery) */}
+        <Gallery />
+        
+        {/* Bạn có thể thêm các section khác (contact, about) ở đây nếu muốn */}
+        
       </main>
+
+      {/* Phần 5: Footer (Clone từ Footer) */}
+      <Footer />
     </div>
   );
-}
+};
