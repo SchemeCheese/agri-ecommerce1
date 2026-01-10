@@ -1,4 +1,3 @@
-// src/app/(standard)/products/page.tsx
 import React from 'react';
 import { Container } from '@/components/ui/Container';
 import { ProductCard } from '@/components/home/ProductCard'; 
@@ -33,11 +32,9 @@ export default function ProductsPage() {
                   imageUrl={product.imageUrl}
                   title={product.title}
                   description={product.description}
-                  price={product.price}
-                />
+                  price={product.price} id={''} rawPrice={0}                />
               ))}
             </div>
-            {/* (Pagination) */}
           </main>
         </div>
       </Container>

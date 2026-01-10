@@ -1,10 +1,11 @@
-// src/components/layouts/Header.tsx
-'use client'; 
-import React, { useState } from 'react';
-import { User, ShoppingCart, Menu } from 'lucide-react';
+'use client';
+import { useState } from 'react';
+import { User, ShoppingCart, Menu } from 'lucide-react'; 
+import Link from 'next/link'; 
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Container } from '@/components/ui/Container';
+import { useCartStore } from '@/store/useCartStore';
 
 interface HeaderProps {
   isScrolled: boolean;
@@ -14,12 +15,14 @@ interface HeaderProps {
 export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
   const { t, currentLanguage, changeLanguage } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { items } = useCartStore();
+  const cartItemCount = items.reduce((total, item) => total + item.quantity, 0);
 
   const navLinks = [
-    { href: '#', text: t('home') },
-    { href: 'products', text: t('products') },
-    { href: 'about', text: t('about') },
-    { href: 'contact', text: t('contact') },
+    { href: '/', text: t('home') },
+    { href: '/products', text: t('products') },
+    { href: '/about', text: t('about') },
+    { href: '/contact', text: t('contact') },
   ];
 
   return (
@@ -28,68 +31,76 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
       isScrolled ? "bg-white shadow-md" : "bg-transparent"
     )}>
       <Container className="flex justify-between items-center">
-        {/* Logo */}
-        <a href="#" className="flex-shrink-0">
+        <Link href="/" className="flex-shrink-0">
           <img src={logoSrc} alt="Agri Logo" className="h-10 w-auto transition-all duration-300 ease-in-out" />
-        </a>
+        </Link>
 
-        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           {navLinks.map((link) => (
-            <a key={link.text} href={link.href} className={cn(
+            <Link key={link.text} href={link.href} className={cn(
               "text-sm font-semibold transition-colors duration-200 ease-in-out",
               isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300"
             )}>
               {link.text}
-            </a>
+            </Link>
           ))}
-          {/* Language & User */}
+          
           <button onClick={() => changeLanguage(currentLanguage === 'vi' ? 'en' : 'vi')} className={cn("text-sm font-semibold", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
             {currentLanguage === 'vi' ? 'EN' : 'VI'}
           </button>
-          <button className={cn("flex items-center space-x-1", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
+          
+          <Link href="/cart" className={cn("flex items-center space-x-1 relative", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
             <ShoppingCart size={20} />
-            <span className="text-xs">(0)</span>
-          </button>
-          <button className={cn("flex items-center space-x-1", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
+            {cartItemCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-green-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {cartItemCount > 99 ? '99+' : cartItemCount}
+              </span>
+            )}
+          </Link>
+          
+          <Link href="/login" className={cn("flex items-center space-x-1", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
             <User size={20} />
             <span className="hidden lg:inline text-sm">{t('login_register')}</span>
-          </button>
+          </Link>
         </nav>
 
-        {/* Mobile Menu Button */}
         <div className="md:hidden flex items-center space-x-2">
-            <button className={cn("flex items-center space-x-1", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
-                <ShoppingCart size={20} />
-            </button>
-            <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className={cn("p-2 rounded-md", isScrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-black/20")}
-                aria-label="Toggle menu"
-            >
-                <Menu size={24} />
-            </button>
+          <Link href="/cart" className={cn("flex items-center relative", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
+            <ShoppingCart size={20} />
+            {cartItemCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-green-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                {cartItemCount > 99 ? '99+' : cartItemCount}
+              </span>
+            )}
+          </Link>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={cn("p-2 rounded-md", isScrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-black/20")}
+            aria-label="Toggle menu"
+          >
+            <Menu size={24} />
+          </button>
         </div>
       </Container>
-       {/* Mobile Menu */}
-       <div className={cn(
-            "md:hidden absolute top-16 left-0 right-0 bg-white shadow-lg transition-transform duration-300 ease-in-out",
-            isMobileMenuOpen ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
-        )}>
-            <nav className="flex flex-col p-4 space-y-2">
-                {navLinks.map((link) => (
-                    <a key={link.text} href={link.href} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600">
-                    {link.text}
-                    </a>
-                ))}
-                 <button onClick={() => changeLanguage(currentLanguage === 'vi' ? 'en' : 'vi')} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
-                    {currentLanguage === 'vi' ? 'Switch to EN' : 'Chuyển sang VI'}
-                 </button>
-                 <button className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
-                    <User size={20} className="mr-2"/> {t('login_register')}
-                 </button>
-            </nav>
-        </div>
+      
+      <div className={cn(
+        "md:hidden absolute top-16 left-0 right-0 bg-white shadow-lg transition-transform duration-300 ease-in-out",
+        isMobileMenuOpen ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
+      )}>
+        <nav className="flex flex-col p-4 space-y-2">
+          {navLinks.map((link) => (
+            <Link key={link.text} href={link.href} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600">
+              {link.text}
+            </Link>
+          ))}
+          <button onClick={() => changeLanguage(currentLanguage === 'vi' ? 'en' : 'vi')} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
+            {currentLanguage === 'vi' ? 'Switch to EN' : 'Chuyển sang VI'}
+          </button>
+          <Link href="/login" className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
+            <User size={20} className="mr-2" /> {t('login_register')}
+          </Link>
+        </nav>
+      </div>
     </header>
   );
 };
