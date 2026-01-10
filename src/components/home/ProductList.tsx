@@ -3,10 +3,9 @@ import React from 'react';
 import { Container } from '@/components/ui/Container';
 import { ProductCard } from './ProductCard';
 
-// Dữ liệu mẫu - Thay thế bằng API sau
 const featuredProducts = [
   {
-    imageUrl: '/images/nongsan/product-1.jpg', // Đặt ảnh vào /public/images/nongsan/
+    imageUrl: '/images/nongsan/product-1.jpg', 
     title: 'Dâu tây Đà Lạt',
     description: 'Dâu tây tươi, mọng nước, chuẩn VietGAP.',
     price: '120.000đ / kg',

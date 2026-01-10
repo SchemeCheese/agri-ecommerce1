@@ -17,11 +17,9 @@ export default function ContactPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Cột trái: Form liên hệ */}
           <div className="bg-gray-50 p-8 rounded-lg shadow-sm border border-gray-200">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">Gửi tin nhắn cho chúng tôi</h2>
             <form className="space-y-4">
-              {/* Tên */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                   Họ và Tên
@@ -35,7 +33,6 @@ export default function ContactPage() {
                 />
               </div>
 
-              {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                   Email
@@ -49,7 +46,6 @@ export default function ContactPage() {
                 />
               </div>
 
-              {/* Tiêu đề */}
               <div>
                 <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
                   Tiêu đề
@@ -63,7 +59,6 @@ export default function ContactPage() {
                 />
               </div>
 
-              {/* Tin nhắn */}
               <div>
                 <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
                   Nội dung tin nhắn
@@ -77,7 +72,6 @@ export default function ContactPage() {
                 />
               </div>
 
-              {/* Nút Gửi */}
               <div>
                 <button
                   type="submit"
@@ -89,9 +83,7 @@ export default function ContactPage() {
             </form>
           </div>
 
-          {/* Cột phải: Thông tin & Bản đồ */}
           <div className="space-y-8">
-            {/* Thông tin liên hệ */}
             <div>
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">Thông tin liên hệ</h2>
               <div className="space-y-4 text-gray-600">
@@ -110,7 +102,6 @@ export default function ContactPage() {
               </div>
             </div>
 
-            {/* Bản đồ (Placeholder) */}
             <div>
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">Vị trí của chúng tôi</h2>
               <div className="w-full h-80 bg-gray-200 rounded-lg flex items-center justify-center text-gray-500 shadow-sm border">

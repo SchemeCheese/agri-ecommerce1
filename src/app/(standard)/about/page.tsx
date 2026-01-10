@@ -30,10 +30,9 @@ export default function AboutPage() {
 
   return (
     <div className="bg-white">
-      {/* 1. Hero Banner */}
       <section className="relative h-[400px] bg-gray-900 text-white">
         <Image
-          src="/images/nongsan/about-banner.jpg" // Cần ảnh mới: /public/images/nongsan/about-banner.jpg
+          src="/images/nongsan/about-banner.jpg" 
           alt="Vườn rau hữu cơ"
           layout="fill"
           objectFit="cover"
@@ -49,13 +48,12 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* 2. Sứ mệnh của chúng tôi */}
       <section className="py-16 md:py-24">
         <Container>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="relative w-full h-80 rounded-lg overflow-hidden shadow-lg">
               <Image
-                src="/images/nongsan/farmer.jpg" // Cần ảnh mới: /public/images/nongsan/farmer.jpg
+                src="/images/nongsan/farmer.jpg"
                 alt="Người nông dân"
                 layout="fill"
                 objectFit="cover"
@@ -78,7 +76,6 @@ export default function AboutPage() {
         </Container>
       </section>
       
-      {/* 3. Giá trị cốt lõi */}
       <section className="py-16 md:py-24 bg-green-50/50">
         <Container>
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
@@ -98,13 +95,12 @@ export default function AboutPage() {
         </Container>
       </section>
 
-      {/* 4. Quy trình (Placeholder) */}
       <section className="py-16 md:py-24">
          <Container>
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
             Quy Trình Của Chúng Tôi
           </h2>
-           {/* Đây là nơi bạn có thể thêm một sơ đồ/timeline đơn giản */}
+           {/*có thể thêm một sơ đồ/timeline đơn giản */}
            <div className="text-center text-gray-500">
              {/* (Nội dung về quy trình: Thu hoạch -> Kiểm định -> Đóng gói -> Vận chuyển) */}
            </div>

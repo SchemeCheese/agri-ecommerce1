@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
-import "./globals.css"; // Import CSS toàn cục
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Web Bán Nông Sản",

@@ -2,15 +2,14 @@
 'use client'; 
 import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/layouts/Header';
-import { Footer } from '@/components/layouts/Footer'; // Import Footer
+import { Footer } from '@/components/layouts/Footer'; 
 import { BannerSlider } from '@/components/home/BannerSlider';
 import { SearchBar } from '@/components/home/SearchBar';
-import { ProductList } from '@/components/home/ProductList'; // Import ProductList
-import { Gallery } from '@/components/home/Gallery';     // Import Gallery
-import { Promotions } from '@/components/home/Promotions'; // Import Promotions
+import { ProductList } from '@/components/home/ProductList'; 
+import { Gallery } from '@/components/home/Gallery';     
+import { Promotions } from '@/components/home/Promotions'; 
 import { useTranslation } from '@/hooks/useTranslation';
 
-// Đường dẫn logo
 const LOGO_LIGHT = '/logos/agri-logo-light.png'; 
 const LOGO_DARK = '/logos/agri-logo-dark.png';  
 
@@ -40,7 +39,6 @@ export default function HomePage() {
       <Header isScrolled={isScrolled} logoSrc={logoSrc} />
 
       <main>
-        {/* Phần 1: Banner & Search (Giống dự án khách sạn) */}
         <section className="relative">
           <BannerSlider />
           <div className="absolute inset-x-0 bottom-10 sm:bottom-20 z-10 px-4">
@@ -51,23 +49,18 @@ export default function HomePage() {
                  </button>
              </div>
           </div>
-           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/50 to-transparent"></div>
+           <div className="absolute bottom-0 left-0 right-0 h-32"></div>
         </section>
 
-        {/* Phần 2: Danh sách Sản phẩm (Clone từ BranchList) */}
         <ProductList />
 
-        {/* Phần 3: Quảng cáo/Ưu đãi (Clone từ Advertisement) */}
         <Promotions />
 
-        {/* Phần 4: Bộ sưu tập ảnh (Clone từ Gallery) */}
         <Gallery />
         
-        {/* Bạn có thể thêm các section khác (contact, about) ở đây nếu muốn */}
         
       </main>
 
-      {/* Phần 5: Footer (Clone từ Footer) */}
       <Footer />
     </div>
   );

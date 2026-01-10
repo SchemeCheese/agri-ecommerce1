@@ -3,13 +3,12 @@
 import React from 'react';
 
 export const CartSummary = () => {
-   // Hàm định dạng tiền (giả lập)
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
   
-  const subtotal = 290000; // Dữ liệu mẫu
-  const shipping = 15000;  // Dữ liệu mẫu
+  const subtotal = 290000; 
+  const shipping = 15000;  
   const total = subtotal + shipping;
   
   return (

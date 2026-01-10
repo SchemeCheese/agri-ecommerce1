@@ -16,7 +16,6 @@ interface CartItemProps {
 }
 
 export const CartItem = ({ item }: CartItemProps) => {
-  // Hàm định dạng tiền
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
@@ -32,7 +31,6 @@ export const CartItem = ({ item }: CartItemProps) => {
         <p className="text-sm text-gray-500">{formatCurrency(item.price)} / {item.unit}</p>
       </div>
       
-      {/* Chọn số lượng */}
       <div className="flex items-center border border-gray-200 rounded-full mx-4">
         <button className="p-2 text-gray-500 hover:text-green-600">
           <Minus size={14} />
@@ -43,12 +41,10 @@ export const CartItem = ({ item }: CartItemProps) => {
         </button>
       </div>
       
-      {/* Tổng tiền của item */}
       <div className="w-24 text-right font-semibold text-gray-800">
         {formatCurrency(item.price * item.quantity)}
       </div>
       
-      {/* Nút xóa */}
       <button className="ml-4 text-gray-400 hover:text-red-500">
         <X size={18} />
       </button>

@@ -1,10 +1,9 @@
 // src/app/(standard)/products/page.tsx
 import React from 'react';
 import { Container } from '@/components/ui/Container';
-import { ProductCard } from '@/components/home/ProductCard'; // Tái sử dụng
+import { ProductCard } from '@/components/home/ProductCard'; 
 import { FilterSidebar } from '@/components/products/FilterSidebar';
 
-// Dữ liệu mẫu (nhiều hơn)
 const allProducts = [
   { imageUrl: '/images/nongsan/product-1.jpg', title: 'Dâu tây Đà Lạt', description: 'Dâu tây tươi, mọng nước.', price: '120.000đ / kg' },
   { imageUrl: '/images/nongsan/product-2.jpg', title: 'Bơ sáp 034', description: 'Bơ sáp dẻo, béo ngậy.', price: '80.000đ / kg' },
@@ -22,12 +21,10 @@ export default function ProductsPage() {
           Tất cả sản phẩm
         </h1>
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar Lọc */}
           <aside className="w-full md:w-1/4 lg:w-1/5">
             <FilterSidebar />
           </aside>
           
-          {/* Lưới sản phẩm */}
           <main className="w-full md:w-3/4 lg:w-4/5">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {allProducts.map((product) => (
@@ -40,7 +37,7 @@ export default function ProductsPage() {
                 />
               ))}
             </div>
-            {/* Thêm Phân trang (Pagination) ở đây sau */}
+            {/* (Pagination) */}
           </main>
         </div>
       </Container>

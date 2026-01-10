@@ -3,7 +3,6 @@ import React from 'react';
 import { Container } from '@/components/ui/Container';
 import Image from 'next/image';
 
-// Dữ liệu ảnh mẫu
 const galleryImages = [
   { src: '/images/nongsan/gallery-1.jpg', alt: 'Cánh đồng lúa' },
   { src: '/images/nongsan/gallery-2.jpg', alt: 'Thu hoạch dâu' },

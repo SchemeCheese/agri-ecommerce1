@@ -10,20 +10,15 @@ interface ProductCardProps {
   price: string;
 }
 
-// ** QUAN TRỌNG: **
-// Cần thêm cấu hình cho domain ảnh trong `next.config.mjs`
-// nếu bạn dùng ảnh từ bên ngoài.
-// Ví dụ:
+// thêm cấu hình cho domain ảnh trong `next.config.mjs`nếu dùng ảnh từ bên ngoài.
 // images: {
 //   domains: ['example.com'],
 // },
-// Nếu dùng ảnh trong /public thì không cần.
 
 export const ProductCard = ({ imageUrl, title, description, price }: ProductCardProps) => {
   return (
     <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white">
       <div className="relative w-full h-48">
-        {/* Giả sử ảnh từ /public */}
         <Image
           src={imageUrl}
           alt={title}
