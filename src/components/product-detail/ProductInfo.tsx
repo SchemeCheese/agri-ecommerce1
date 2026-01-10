@@ -29,11 +29,9 @@ export const ProductInfo = ({ product }: ProductInfoProps) => {
       images: [],
       slug: '',
       description: '',
-      category: '',
-      sellerId: '',
-      rating: 0,
-      sold: 0,
-      origin: ''
+      category: (product.category as 'gia-vi' | 'trai-cay' | 'rau-cu' | 'ngu-coc' | 'khac') || 'khac',
+      origin: 'khac',
+      seasons: []
     }, quantity);
     alert("Đã thêm vào giỏ!");
   }

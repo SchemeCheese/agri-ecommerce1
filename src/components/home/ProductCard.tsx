@@ -1,8 +1,11 @@
 "use client"; 
 
 import Image from 'next/image';
+import Link from 'next/link'; 
 import { ShoppingCart } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
+
+type ProductCategory = 'trai-cay' | 'rau-cu' | 'ngu-coc' | 'gia-vi' | 'khac';
 
 interface ProductCardProps {
   id: string;       
@@ -12,17 +15,33 @@ interface ProductCardProps {
   price: string;    
   rawPrice: number;
   slug?: string;
-  category?: string;
+  category?: ProductCategory;
   sellerId?: string;
   stock?: number;
   unit?: string;
   createdAt?: Date;
 }
 
-export const ProductCard = ({ id, imageUrl, title, description, price, rawPrice, slug = '', category = '', sellerId = '', stock = 0, unit = '', createdAt = new Date() }: ProductCardProps) => {
+export const ProductCard = ({ 
+  id, 
+  imageUrl, 
+  title, 
+  description, 
+  price, 
+  rawPrice, 
+  slug = '', 
+  category = 'khac', 
+  sellerId = '', 
+  stock = 0, 
+  unit = '', 
+  createdAt = new Date() 
+}: ProductCardProps) => {
   const addToCart = useCartStore((state) => state.addToCart);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation(); 
+    
     addToCart({
       id: id,
       name: title,
@@ -31,33 +50,40 @@ export const ProductCard = ({ id, imageUrl, title, description, price, rawPrice,
       slug: slug,
       description: description,
       category: category,
-      sellerId: sellerId,
-      rating: 0,
-      sold: 0,
-      origin: ''
+      origin: 'khac',
+      seasons: []
     });
     alert(`Đã thêm ${title} vào giỏ!`);
   };
 
+  const productDetailUrl = `/products/${slug}`;
+
   return (
-    <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white">
-      <div className="relative w-full h-48">
+    <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white flex flex-col h-full group">
+      <Link href={productDetailUrl} className="relative w-full h-48 block overflow-hidden">
         <Image
           src={imageUrl}
           alt={title}
           fill
-          className="object-cover transition-transform duration-300 hover:scale-105"
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
-      </div>
-      <div className="p-4">
-        <h3 className="font-semibold text-lg text-gray-800 mb-1 line-clamp-1">{title}</h3>
+      </Link>
+
+      <div className="p-4 flex flex-col flex-grow">
+        <Link href={productDetailUrl}>
+          <h3 className="font-semibold text-lg text-gray-800 mb-1 line-clamp-1 hover:text-green-600 transition-colors cursor-pointer">
+            {title}
+          </h3>
+        </Link>
+        
         <p className="text-sm text-gray-600 mb-3 h-10 line-clamp-2">{description}</p>
-        <div className="flex justify-between items-center">
+        
+        <div className="mt-auto flex justify-between items-center">
           <p className="font-bold text-green-600 text-lg">{price}</p>
           
           <button 
             onClick={handleAddToCart}
-            className="p-2 bg-green-100 text-green-600 rounded-full hover:bg-green-600 hover:text-white transition-colors"
+            className="p-2 bg-green-100 text-green-600 rounded-full hover:bg-green-600 hover:text-white transition-all transform active:scale-95 shadow-sm"
             title="Thêm vào giỏ hàng"
           >
             <ShoppingCart size={18} />

@@ -1,6 +1,5 @@
-// src/components/ui/Container.tsx
 import React from 'react';
-import { cn } from '@/lib/utils'; // Đảm bảo bạn đã có file này
+import { cn } from '@/lib/utils';
 
 interface ContainerProps {
   children: React.ReactNode;

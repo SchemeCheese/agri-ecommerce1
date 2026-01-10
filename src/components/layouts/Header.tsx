@@ -7,12 +7,21 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { Container } from '@/components/ui/Container';
 import { useCartStore } from '@/store/useCartStore';
 
+import { useAuthStore } from '@/store/useAuthStore'; // Import store
+import { useEffect } from 'react';
+
 interface HeaderProps {
   isScrolled: boolean;
   logoSrc: string;
 }
 
 export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
+
+  const { isLoggedIn, user } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
   const { t, currentLanguage, changeLanguage } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { items } = useCartStore();
@@ -58,10 +67,21 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
             )}
           </Link>
           
-          <Link href="/login" className={cn("flex items-center space-x-1", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
-            <User size={20} />
-            <span className="hidden lg:inline text-sm">{t('login_register')}</span>
-          </Link>
+          {mounted && isLoggedIn && user ? (
+            <Link href="/profile" className={cn("flex items-center space-x-2 pl-2 border-l border-gray-300", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
+              <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="hidden lg:inline text-sm font-medium max-w-[100px] truncate">
+                {user.name}
+              </span>
+            </Link>
+          ) : (
+            <Link href="/login" className={cn("flex items-center space-x-1", isScrolled ? "text-gray-700 hover:text-green-600" : "text-white hover:text-green-300")}>
+              <User size={20} />
+              <span className="hidden lg:inline text-sm">{t('login_register')}</span>
+            </Link>
+          )}
         </nav>
 
         <div className="md:hidden flex items-center space-x-2">
@@ -96,9 +116,21 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
           <button onClick={() => changeLanguage(currentLanguage === 'vi' ? 'en' : 'vi')} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
             {currentLanguage === 'vi' ? 'Switch to EN' : 'Chuyển sang VI'}
           </button>
-          <Link href="/login" className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
-            <User size={20} className="mr-2" /> {t('login_register')}
-          </Link>
+          {mounted && isLoggedIn && user ? (
+            <Link href="/profile" className="flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 bg-green-50 mt-2">
+              <div className="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-sm mr-3">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col">
+                <span>{user.name}</span>
+                <span className="text-xs text-gray-500">Xem hồ sơ</span>
+              </div>
+            </Link>
+          ) : (
+            <Link href="/login" className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-green-600 text-left">
+              <User size={20} className="mr-2" /> {t('login_register')}
+            </Link>
+          )}
         </nav>
       </div>
     </header>
