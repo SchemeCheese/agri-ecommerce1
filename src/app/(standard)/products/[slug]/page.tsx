@@ -1,6 +1,6 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
-import { MOCK_PRODUCTS } from '@/data/mockData';
+import { MOCK_PRODUCTS } from '@/data'
 import ProductClient from './ProductClient'; 
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
