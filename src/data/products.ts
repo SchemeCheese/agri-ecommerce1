@@ -33,6 +33,8 @@ export interface Product {
     vouchers?: string[];
     reviews?: Review[];
     createdAt: string;
+
+    returnCount?: number;
 }
 
 // Helper lấy shop cho nhanh
@@ -72,6 +74,8 @@ export const MOCK_PRODUCTS: Product[] = [
             { id: 'r5', userName: 'Thúy Vân', avatar: '', rating: 5, comment: 'Sẽ tiếp tục ủng hộ shop!', date: '2023-12-12' }, 
         ],
         createdAt: '2024-01-15',
+
+        returnCount: 12,
     },
     {
         id: 'tc-2',
@@ -99,6 +103,8 @@ export const MOCK_PRODUCTS: Product[] = [
             { id: 'r9', userName: 'Văn Đức', avatar: '', rating: 4, comment: 'Bơ ngon, nhưng hơi nhỏ quả.', date: '2024-01-28' },
         ],
         createdAt: '2024-05-20',
+
+        returnCount: 5,
     },
     {
         id: 'tc-3',
@@ -124,6 +130,8 @@ export const MOCK_PRODUCTS: Product[] = [
             { id: 'r11', userName: 'Minh Tuấn', avatar: '', rating: 4, comment: 'Giao hàng nhanh, sản phẩm tươi.', date: '2024-06-07' },
         ],
         createdAt: '2024-06-01',
+
+        returnCount: 2,
     },
     {
         id: 'tc-4',
@@ -144,6 +152,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Chuối già hương chín cây, giàu năng lượng.',
         rating: 4.5, reviewCount: 200, sold: 1000, stock: 500, brand: 'Nhà Vườn', shop: MIENTAY_SHOP,
         createdAt: '2024-04-10',
+
+        returnCount: 20,
     },
     {
         id: 'tc-5',
@@ -163,6 +173,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Dưa hấu giải nhiệt, ruột đỏ cát, ngọt mát.',
         rating: 4.6, reviewCount: 30, sold: 300, stock: 50, brand: 'Long An Farm', shop: MIENTAY_SHOP,
         createdAt: '2024-03-25',
+
+        returnCount: 8,
     },
     {
         id: 'tc-6',
@@ -182,6 +194,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Cam mọng nước, nhiều vitamin C, tốt cho sức khỏe.',
         rating: 4.8, reviewCount: 90, sold: 600, stock: 200, brand: 'Vinh Long', shop: MIENTAY_SHOP,
         createdAt: '2024-02-18',
+
+        returnCount: 15,
     },
     {
         id: 'tc-7',
@@ -208,6 +222,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Táo nhập khẩu, giòn tan, vị ngọt đậm.',
         rating: 4.9, reviewCount: 60, sold: 180, stock: 40, brand: 'Envy New Zealand', shop: TAYBAC_SHOP,
         createdAt: '2024-05-05',
+
+        returnCount: 3,
     },
 
     // --- 2. RAU CỦ (VEGETABLES) ---
@@ -223,6 +239,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Rau sạch thủy canh, an toàn, tươi mát. Dùng làm salad cực ngon.',
         rating: 4.8, reviewCount: 40, sold: 300, stock: 20, brand: 'Dalat Gap', shop: DALAT_SHOP,
         createdAt: '2024-03-12',
+
+        returnCount: 12,
     },
     {
         id: 'rc-2',
@@ -236,6 +254,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Cà chua nhỏ, giòn ngọt, thích hợp ăn sống.',
         rating: 4.7, reviewCount: 55, sold: 400, stock: 50, brand: 'Organic', shop: DALAT_SHOP,
         createdAt: '2024-04-08',
+
+        returnCount: 7,
     },
     {
         id: 'rc-3',
@@ -249,6 +269,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Cà rốt củ to, màu cam đẹp, ngọt tự nhiên.',
         rating: 4.6, reviewCount: 30, sold: 150, stock: 100, brand: 'Local Farm', shop: DALAT_SHOP,
         createdAt: '2024-02-22',
+
+        returnCount: 4,
     },
     {
         id: 'rc-4',
@@ -262,6 +284,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Bông cải xanh giàu chất xơ, tốt cho tiêu hóa.',
         rating: 4.9, reviewCount: 20, sold: 100, stock: 30, brand: 'Dalat Gap', shop: DALAT_SHOP,
         createdAt: '2024-01-18',
+
+        returnCount: 2,
     },
     {
         id: 'rc-5',
@@ -275,6 +299,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Khoai tây bở, thích hợp nấu canh, chiên.',
         rating: 4.5, reviewCount: 25, sold: 200, stock: 150, brand: 'Local Farm', shop: DALAT_SHOP,
         createdAt: '2024-02-10',
+
+        returnCount: 6,
     },
     {
         id: 'rc-6',
@@ -288,6 +314,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Ớt chuông dày cơm, ngọt, không hăng.',
         rating: 4.8, reviewCount: 15, sold: 80, stock: 40, brand: 'Green House', shop: DALAT_SHOP,
         createdAt: '2024-03-05',
+
+        returnCount: 1,
     },
     {
         id: 'rc-7',
@@ -301,6 +329,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Dưa leo nhỏ, đặc ruột, giòn tan.',
         rating: 4.7, reviewCount: 60, sold: 500, stock: 100, brand: 'Mekong Fresh', shop: MIENTAY_SHOP,
         createdAt: '2024-04-15',
+
+        returnCount: 9,
     },
     {
         id: 'rc-8',
@@ -314,6 +344,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Hành tây tím, vị hăng nhẹ, làm salad rất ngon.',
         rating: 4.6, reviewCount: 10, sold: 90, stock: 80, brand: 'Dalat Onion', shop: DALAT_SHOP,
         createdAt: '2024-05-22',
+
+        returnCount: 0,
     },
 
     // --- 3. NGŨ CỐC (GRAINS) ---
@@ -329,6 +361,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Gạo ngon nhất thế giới, dẻo thơm.',
         rating: 5.0, reviewCount: 300, sold: 2000, stock: 500, brand: 'Ông Cua', shop: HAT_SHOP,
         createdAt: '2024-02-28',
+
+        returnCount: 25,
     },
     {
         id: 'nc-2',
@@ -342,6 +376,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Yến mạch nhập khẩu, tốt cho tim mạch.',
         rating: 4.8, reviewCount: 45, sold: 200, stock: 50, brand: 'Quaker', shop: TAYBAC_SHOP,
         createdAt: '2024-03-15',
+
+        returnCount: 5,
     },
     {
         id: 'nc-3',
@@ -359,6 +395,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Đậu đen hạt nhỏ, nấu chè bở tơi.',
         rating: 4.6, reviewCount: 20, sold: 150, stock: 60, brand: 'Local', shop: TAYBAC_SHOP,
         createdAt: '2024-04-18',
+
+        returnCount: 3,
     },
     {
         id: 'nc-4',
@@ -372,6 +410,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Bắp ngô ngọt, hạt đều, luộc hay nướng đều ngon.',
         rating: 4.5, reviewCount: 50, sold: 400, stock: 100, brand: 'Local', shop: MIENTAY_SHOP,
         createdAt: '2024-05-10',
+
+        returnCount: 10,
     },
     {
         id: 'nc-5',
@@ -385,6 +425,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Siêu thực phẩm, giàu protein, thay thế cơm.',
         rating: 4.9, reviewCount: 15, sold: 60, stock: 20, brand: 'Organic Life', shop: TAYBAC_SHOP,
         createdAt: '2024-01-25',
+
+        returnCount: 2,
     },
     {
         id: 'nc-6',
@@ -398,6 +440,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Gạo lứt đỏ Điện Biên, dẻo, tốt cho người ăn kiêng.',
         rating: 4.7, reviewCount: 80, sold: 350, stock: 100, brand: 'Điện Biên', shop: TAYBAC_SHOP,
         createdAt: '2024-06-12',
+
+        returnCount: 6,
     },
 
     // --- 4. GIA VỊ (SPICES) ---
@@ -413,6 +457,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Tỏi một nhánh thơm nồng, dược tính cao.',
         rating: 5.0, reviewCount: 10, sold: 25, stock: 10, brand: 'Lý Sơn', shop: MIENTAY_SHOP,
         createdAt: '2024-02-05',
+
+        returnCount: 4,
     },
     {
         id: 'gv-2',
@@ -426,6 +472,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Hạt tiêu chắc, cay nồng đặc trưng.',
         rating: 4.8, reviewCount: 40, sold: 120, stock: 50, brand: 'Phú Quốc', shop: MIENTAY_SHOP,
         createdAt: '2024-03-20',
+
+        returnCount: 7,
     },
     {
         id: 'gv-3',
@@ -439,6 +487,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Ớt bột làm kim chi, màu đỏ đẹp, cay vừa.',
         rating: 4.7, reviewCount: 20, sold: 100, stock: 30, brand: 'Korea Red', shop: DEFAULT_SHOP,
         createdAt: '2025-04-28',
+
+        returnCount: 3,
     },
     {
         id: 'gv-4',
@@ -452,6 +502,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Quế thanh cạo vỏ, thơm ngọt, dùng nấu phở.',
         rating: 4.6, reviewCount: 15, sold: 60, stock: 20, brand: 'Yên Bái', shop: HAT_SHOP,
         createdAt: '2025-05-30',
+
+        returnCount: 2,
     },
     {
         id: 'gv-5',
@@ -465,6 +517,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Gừng củ nhỏ, cay nồng, ấm bụng.',
         rating: 4.7, reviewCount: 25, sold: 80, stock: 40, brand: 'Local', shop: HAT_SHOP,
         createdAt: '2025-12-15',
+
+        returnCount: 9,
     },
     {
         id: 'gv-6',
@@ -478,6 +532,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Nghệ vàng tươi, dùng kho cá hoặc làm đẹp.',
         rating: 4.5, reviewCount: 18, sold: 70, stock: 50, brand: 'Local', shop: DEFAULT_SHOP,
         createdAt: '2025-06-10',
+
+        returnCount: 1,
     },
 
     // --- 5. KHÁC (OTHERS) ---
@@ -493,6 +549,8 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Mật ong nguyên chất, sánh đặc.',
         rating: 4.9, reviewCount: 50, sold: 150, stock: 20, brand: 'Forest Honey', shop: DEFAULT_SHOP,
         createdAt: '2024-03-08',
+
+        returnCount: 4,
     },
     {
         id: 'kh-2',
@@ -506,5 +564,7 @@ export const MOCK_PRODUCTS: Product[] = [
         description: 'Trà búp sao khô, nước xanh, vị chát hậu ngọt.',
         rating: 4.8, reviewCount: 70, sold: 220, stock: 60, brand: 'Tân Cương', shop: TAYBAC_SHOP,
         createdAt: '2024-04-12',
+
+        returnCount: 5,
     }
 ];
