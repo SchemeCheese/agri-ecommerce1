@@ -1,8 +1,11 @@
+// src/components/seller/common/SellerSidebar.tsx
 "use client";
 
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+// 1. Import Context
+import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, Package, PackagePlus, MessageSquare, 
   LogOut, Star, Store, ShoppingBag 
@@ -10,7 +13,7 @@ import {
 
 const MENU_ITEMS = [
   { icon: <LayoutDashboard size={20} />, label: 'Tổng quan', href: '/dashboard' },
-  { icon: <ShoppingBag size={20} />, label: 'Đơn hàng', href: '/dashboard/orders' }, // Thêm đơn hàng
+  { icon: <ShoppingBag size={20} />, label: 'Đơn hàng', href: '/dashboard/orders' },
   { icon: <Package size={20} />, label: 'Sản phẩm', href: '/dashboard/products' },
   { icon: <PackagePlus size={20} />, label: 'Thêm mới', href: '/dashboard/products/create' },
   { icon: <Star size={20} />, label: 'Đánh giá', href: '/dashboard/reviews' },
@@ -20,6 +23,15 @@ const MENU_ITEMS = [
 
 export const SellerSidebar = () => {
   const pathname = usePathname();
+  // 2. Lấy hàm logout từ Context
+  const { logout } = useAuth();
+
+  // 3. Hàm xử lý đăng xuất
+  const handleLogout = () => {
+    if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi Kênh Người Bán?')) {
+      logout();
+    }
+  };
 
   return (
     <aside className="w-64 bg-white border-r border-gray-100 flex flex-col h-screen sticky top-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
@@ -35,7 +47,7 @@ export const SellerSidebar = () => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto py-4">
+      <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto py-4 custom-scrollbar">
         {MENU_ITEMS.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -57,9 +69,12 @@ export const SellerSidebar = () => {
         })}
       </nav>
 
-      {/* Footer Sidebar */}
+      {/* Footer Sidebar - Nút Đăng Xuất */}
       <div className="p-4 border-t border-gray-50 mx-4 mb-4">
-        <button className="flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl w-full text-sm font-bold transition-colors">
+        <button 
+          onClick={handleLogout} // 4. Gắn sự kiện vào nút
+          className="flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl w-full text-sm font-bold transition-colors"
+        >
           <LogOut size={20} /> Đăng xuất
         </button>
       </div>

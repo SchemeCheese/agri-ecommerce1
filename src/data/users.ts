@@ -1,15 +1,15 @@
 // src/data/users.ts
 
-export type UserRole = 'buyer' | 'seller' | 'admin';
+export type UserRole = 'buyer' | 'seller';
 
 export interface User {
   id: string;
   email: string;
-  password: string; // Trong thực tế phải hash, ở đây demo để plain text
+  password: string; 
   name: string;
   role: UserRole;
   avatar: string;
-  shopId?: string; // Chỉ dành cho seller, để biết họ sở hữu shop nào
+  shopId?: string; 
 }
 
 export const MOCK_USERS: User[] = [
@@ -22,7 +22,7 @@ export const MOCK_USERS: User[] = [
     role: 'buyer',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'
   },
-  // 2. Tài khoản CHỦ SHOP (Shop 1 - Nông Trại Cầu Đất)
+  // 2. Tài khoản CHỦ SHOP (Gán với shop-1 trong shops.ts)
   {
     id: 'u2',
     email: 'shop@gmail.com',
@@ -30,6 +30,6 @@ export const MOCK_USERS: User[] = [
     name: 'Nông Trại Cầu Đất',
     role: 'seller',
     avatar: 'https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=100&auto=format&fit=crop',
-    shopId: 'shop-1' // Quan trọng: Liên kết với dữ liệu shop-1
+    shopId: 'shop-1' 
   }
 ];

@@ -4,36 +4,52 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuthStore } from '@/store/useAuthStore';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+// 1. Thay thế Store cũ bằng Context mới
+import { useAuth } from '@/context/AuthContext';
+import { Mail, Lock, ArrowRight, User, Store } from 'lucide-react';
 
 function LoginContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const login = useAuthStore((state) => state.login);
+  // const router = useRouter(); // Context đã tự xử lý redirect nên không cần router ở đây nữa (trừ khi cần custom)
+  // const searchParams = useSearchParams(); // Context xử lý logic role
   
-  const returnUrl = searchParams.get('returnUrl') || '/';
+  // 2. Lấy hàm login từ Context
+  const { login } = useAuth();
+  
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
-    setTimeout(() => {
-      login({
-        name: 'Khách hàng Demo',
-        email: formData.email
-      });
-      alert("Đăng nhập thành công!");
-      router.push(returnUrl); 
+    // 3. Gọi hàm login từ Context (Logic mới)
+    const success = await login(formData.email, formData.password);
+    
+    if (success) {
+      // Context tự chuyển trang (Buyer -> Home, Seller -> Dashboard)
+      // alert("Đăng nhập thành công!"); // Có thể bỏ alert cho mượt
+    } else {
+      setError('Email hoặc mật khẩu không đúng!');
       setLoading(false);
-    }, 1000);
+    }
+  };
+
+  // 4. Hàm hỗ trợ điền nhanh (Demo)
+  const fillCredential = (type: 'buyer' | 'seller') => {
+    if (type === 'buyer') {
+      setFormData({ email: 'khach@gmail.com', password: '123' });
+    } else {
+      setFormData({ email: 'shop@gmail.com', password: '123' });
+    }
+    setError('');
   };
 
   return (
     <div className="min-h-screen flex bg-white font-sans"> 
       
+      {/* --- CỘT TRÁI: ẢNH (GIỮ NGUYÊN) --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">
         <Image 
           src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop" 
@@ -47,6 +63,7 @@ function LoginContent() {
         </div>
       </div>
 
+      {/* --- CỘT PHẢI: FORM --- */}
       <div className="flex-1 flex items-center justify-center p-8 sm:p-12 md:p-16 bg-gray-50 lg:bg-white">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center lg:text-left">
@@ -56,6 +73,16 @@ function LoginContent() {
             <p className="mt-2 text-sm text-gray-600 font-sans">
               Vui lòng đăng nhập để quản lý đơn hàng và thanh toán.
             </p>
+          </div>
+
+          {/* --- THÊM: NÚT TEST NHANH (Hòa hợp với giao diện) --- */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+             <button onClick={() => fillCredential('buyer')} className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition border border-blue-100">
+                <User size={16} /> Test Khách
+             </button>
+             <button onClick={() => fillCredential('seller')} className="flex items-center justify-center gap-2 py-2 px-4 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition border border-green-100">
+                <Store size={16} /> Test Chủ Shop
+             </button>
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -89,6 +116,9 @@ function LoginContent() {
               </div>
             </div>
 
+            {/* Hiển thị lỗi nếu có */}
+            {error && <p className="text-red-500 text-sm text-center font-medium bg-red-50 p-2 rounded-lg">{error}</p>}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input id="remember-me" type="checkbox" className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer" />
@@ -102,9 +132,9 @@ function LoginContent() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg shadow-green-200"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg shadow-green-200 disabled:opacity-70"
             >
-              {loading ? 'Đang xử lý...' : 'ĐĂNG NHẬP NGAY'}
+              {loading ? 'Đang xác thực...' : 'ĐĂNG NHẬP NGAY'}
               {!loading && <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />}
             </button>
           </form>
