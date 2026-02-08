@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   // 2. Hàm Login: Sửa lại Logic điều hướng
-  const login = async (email: string, pass: string) => {
+const login = async (email: string, pass: string) => {
     setIsLoading(true);
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
@@ -67,27 +67,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const { access_token, user } = response.data;
 
-      // Lưu vào LocalStorage
+      // Lưu storage
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('agri_user', JSON.stringify(user));
       setUser(user);
 
-      // --- QUAN TRỌNG: Điều hướng dựa trên Role ---
-      // Chuẩn hóa role về chữ in hoa để so sánh cho chắc chắn
-      const userRole = user.role?.toUpperCase(); 
+      // --- LOGIC REDIRECT QUAN TRỌNG ---
+      // 1. Chuyển role về chữ in hoa để so sánh cho chắc chắn
+      const role = user.role?.toUpperCase(); 
 
-      if (userRole === 'SELLER') {
-        router.push('/dashboard'); // Seller vào trang quản trị
-      } else if (userRole === 'ADMIN') {
-        router.push('/admin');     // Admin (nếu có)
+      // 2. Điều hướng
+      if (role === 'SELLER') {
+        console.log("Là Seller -> Vào Dashboard"); // Log để debug
+        router.push('/dashboard'); 
+      } else if (role === 'ADMIN') {
+        router.push('/admin');
       } else {
-        router.push('/');          // Buyer ra trang chủ mua hàng
+        console.log("Là Buyer -> Vào Home"); // Log để debug
+        router.push('/');
       }
       
       return true;
     } catch (error) {
       console.error("Login Error:", error);
-      alert("Đăng nhập thất bại: Email hoặc mật khẩu không đúng.");
       return false;
     } finally {
       setIsLoading(false);

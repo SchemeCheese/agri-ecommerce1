@@ -1,8 +1,8 @@
-// src/app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext"; 
+import { AuthProvider } from "@/context/AuthContext";
+// XÓA import Header, Footer ở đây
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,7 +20,8 @@ export default function RootLayout({
     <html lang="vi">
       <body className={inter.className}>
         <AuthProvider>
-          {children}
+            {/* Chỉ render children, không Header/Footer ở đây */}
+            {children}
         </AuthProvider>
       </body>
     </html>

@@ -15,13 +15,13 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     if (!isLoading) {
       if (!user) {
         router.push('/login'); // Chưa login -> Về login
-      } else if (user.role !== 'seller') {
+      } else if (user.role !== 'SELLER') {
         router.push('/'); // Login rồi mà không phải seller -> Về trang chủ
       }
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || !user || user.role !== 'seller') {
+  if (isLoading || !user || user.role !== 'SELLER') {
     return <div className="h-screen flex items-center justify-center">Đang tải dữ liệu...</div>;
   }
 
