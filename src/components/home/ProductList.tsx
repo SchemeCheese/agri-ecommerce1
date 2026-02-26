@@ -1,26 +1,49 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Container } from '@/components/ui/Container'; 
 import { ProductCard } from './ProductCard';
-import { MOCK_PRODUCTS } from '@/data/mockData'; 
 
 const ITEMS_PER_PAGE = 6;
+const API_URL = 'http://localhost:3001/products'; // Địa chỉ API Backend
 
 const CATEGORIES = [
   { id: 'all', label: 'Tất cả' },
-  { id: 'trai-cay', label: 'Trái cây' },
-  { id: 'rau-cu', label: 'Rau củ' },
-  { id: 'ngu-coc', label: 'Ngũ cốc & Hạt' },
-  { id: 'gia-vi', label: 'Gia vị' },
-  { id: 'khac', label: 'Khác' },
+  // Chú ý: Backend trả về 'Trái cây', 'Rau củ' (chữ thường hoặc hoa tuỳ bạn config, ở đây map theo tên trả về)
+  { id: 'Trái cây', label: 'Trái cây' },
+  { id: 'Rau củ', label: 'Rau củ' },
+  { id: 'Ngũ cốc', label: 'Ngũ cốc & Hạt' },
+  { id: 'Gia vị', label: 'Gia vị' },
+  { id: 'Khác', label: 'Khác' },
 ];
 
 export const ProductList = () => {
+  const [products, setProducts] = useState<any[]>([]); // State lưu trữ dữ liệu thật
+  const [loading, setLoading] = useState(true);
+  
   const [activeCategory, setActiveCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Gọi API lấy dữ liệu khi component render
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await axios.get(API_URL);
+        setProducts(response.data);
+      } catch (error) {
+        console.error("Lỗi khi tải sản phẩm:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  // Lọc dữ liệu thật
   const filteredProducts = activeCategory === 'all' 
-    ? MOCK_PRODUCTS 
-    : MOCK_PRODUCTS.filter(product => product.category === activeCategory);
+    ? products 
+    : products.filter(product => product.category === activeCategory);
 
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -37,6 +60,16 @@ export const ProductList = () => {
       document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
+  if (loading) {
+    return (
+      <section id="products" className="py-16 bg-white">
+        <Container>
+          <div className="text-center text-gray-500 py-10">Đang tải sản phẩm từ máy chủ...</div>
+        </Container>
+      </section>
+    );
+  }
 
   return (
     <section id="products" className="py-16 bg-white">
@@ -72,6 +105,8 @@ export const ProductList = () => {
                 description={product.description}
                 price={`${product.price.toLocaleString('vi-VN')}đ / kg`}
                 rawPrice={product.price} 
+                slug={product.slug}
+                category={product.category as any} // Ép kiểu tạm thời
               />
             ))
           ) : (

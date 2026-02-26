@@ -21,8 +21,10 @@ export const HeaderSecondary = () => {
   const { t, currentLanguage, changeLanguage } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const { items } = useCartStore();
-  const cartItemCount = items.reduce((total, item) => total + item.quantity, 0);
+  const { carts, activeUserId } = useCartStore();
+  const items = carts[activeUserId] || [];
+
+  const cartItemCount = items.length;
 
   const navLinks = [
     { href: '/', text: t('home') },
@@ -62,7 +64,7 @@ export const HeaderSecondary = () => {
           <Link href="/cart" className="flex items-center space-x-1 relative text-gray-700 hover:text-green-600">
             <ShoppingCart size={20} />
             {mounted && cartItemCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-green-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center border-2 border-white">
                 {cartItemCount > 99 ? '99+' : cartItemCount}
               </span>
             )}
@@ -111,22 +113,22 @@ export const HeaderSecondary = () => {
         </nav>
 
         {/* MOBILE TOGGLE */}
-          <div className="md:hidden flex items-center space-x-4">
-            <Link href="/cart" className="flex items-center relative text-gray-700 hover:text-green-600">
-              <ShoppingCart size={20} />
-              {mounted && cartItemCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-green-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                  {cartItemCount > 99 ? '99+' : cartItemCount}
-                </span>
-              )}
-            </Link>
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-700 hover:bg-gray-100"
-            >
-              <Menu size={24} />
-            </button>
-          </div>
+        <div className="md:hidden flex items-center space-x-4">
+          <Link href="/cart" className="flex items-center relative text-gray-700 hover:text-green-600">
+            <ShoppingCart size={20} />
+            {mounted && cartItemCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                {cartItemCount > 99 ? '99+' : cartItemCount}
+              </span>
+            )}
+          </Link>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-md text-gray-700 hover:bg-gray-100"
+          >
+            <Menu size={24} />
+          </button>
+        </div>
       </Container>
 
       {/* MOBILE MENU */}

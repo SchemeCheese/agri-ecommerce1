@@ -1,33 +1,32 @@
+// src/app/(auth)/register/page.tsx
 "use client";
 
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-// Thêm icon Store và User để minh họa cho Role
+import api from '@/lib/axios'; // Dùng thư viện axios custom
 import { Mail, Lock, User, ArrowRight, CheckCircle, Store } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
   
-  // 1. Thêm 'role' vào state, mặc định là BUYER
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'BUYER' // Giá trị mặc định
+    role: 'BUYER' 
   });
   
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // Hàm xử lý nhập liệu thông thường
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Hàm xử lý chọn Role riêng biệt
   const selectRole = (role: 'BUYER' | 'SELLER') => {
     setFormData({ ...formData, role });
   };
@@ -35,27 +34,36 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
+    setSuccess('');
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Mật khẩu xác nhận không khớp!");
+      setError("Mật khẩu xác nhận không khớp!");
       setLoading(false);
       return;
     }
 
     try {
-      // 2. Gửi đúng role lên Backend
-      await axios.post('http://localhost:3000/auth/register', {
+      // Gửi API lên Backend thông qua instance `api`
+      await api.post('/auth/register', {
         email: formData.email,
         password: formData.password,
         full_name: formData.fullName,
-        role: formData.role // <-- Gửi role người dùng đã chọn
+        role: formData.role 
       });
 
-      alert("Đăng ký thành công! Vui lòng đăng nhập.");
-      router.push('/login');
+      setSuccess("Đăng ký thành công! Đang chuyển hướng đến Đăng nhập...");
+      setTimeout(() => {
+        router.push('/login');
+      }, 2000);
+      
     } catch (error: any) {
-      const msg = error.response?.data?.message || "Đăng ký thất bại";
-      alert(msg);
+      // Bắt lỗi trùng email từ Backend (Status 409)
+      if (error.response?.status === 409) {
+        setError('Email này đã được sử dụng. Vui lòng chọn email khác.');
+      } else {
+        setError(error.response?.data?.message || "Đăng ký thất bại. Vui lòng thử lại.");
+      }
     } finally {
       setLoading(false);
     }
@@ -92,11 +100,10 @@ export default function RegisterPage() {
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             
-            {/* --- PHẦN CHỌN ROLE MỚI THÊM VÀO --- */}
+            {/* --- PHẦN CHỌN ROLE --- */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Bạn là ai?</label>
               <div className="grid grid-cols-2 gap-4">
-                {/* Nút chọn Người mua */}
                 <div 
                   onClick={() => selectRole('BUYER')}
                   className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center transition-all ${
@@ -111,7 +118,6 @@ export default function RegisterPage() {
                   </span>
                 </div>
 
-                {/* Nút chọn Người bán */}
                 <div 
                   onClick={() => selectRole('SELLER')}
                   className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center transition-all ${
@@ -127,19 +133,18 @@ export default function RegisterPage() {
                 </div>
               </div>
             </div>
-            {/* --- HẾT PHẦN CHỌN ROLE --- */}
+
+            {/* Hiển thị lỗi hoặc thành công */}
+            {error && <p className="text-red-500 text-sm text-center font-medium bg-red-50 p-2 rounded-lg">{error}</p>}
+            {success && <p className="text-green-700 text-sm text-center font-medium bg-green-50 p-2 rounded-lg">{success}</p>}
 
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                 <User size={20} />
               </div>
               <input
-                id="fullName"
-                name="fullName"
-                type="text"
-                required
-                placeholder="Họ và tên"
-                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+                id="fullName" name="fullName" type="text" required placeholder="Họ và tên"
+                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 outline-none transition"
                 onChange={handleChange}
               />
             </div>
@@ -149,12 +154,8 @@ export default function RegisterPage() {
                 <Mail size={20} />
               </div>
               <input
-                id="email-address"
-                name="email"
-                type="email"
-                required
-                placeholder="Địa chỉ Email"
-                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+                id="email-address" name="email" type="email" required placeholder="Địa chỉ Email"
+                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 outline-none transition"
                 onChange={handleChange}
               />
             </div>
@@ -164,12 +165,8 @@ export default function RegisterPage() {
                 <Lock size={20} />
               </div>
               <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                placeholder="Mật khẩu"
-                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+                id="password" name="password" type="password" required minLength={6} placeholder="Mật khẩu (ít nhất 6 ký tự)"
+                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 outline-none transition"
                 onChange={handleChange}
               />
             </div>
@@ -179,24 +176,14 @@ export default function RegisterPage() {
                 <CheckCircle size={20} />
               </div>
               <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                placeholder="Nhập lại mật khẩu"
-                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+                id="confirmPassword" name="confirmPassword" type="password" required placeholder="Nhập lại mật khẩu"
+                className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 outline-none transition"
                 onChange={handleChange}
               />
             </div>
 
             <div className="flex items-center">
-              <input
-                id="terms"
-                name="terms"
-                type="checkbox"
-                required
-                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
-              />
+              <input id="terms" type="checkbox" required className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer" />
               <label htmlFor="terms" className="ml-2 block text-sm text-gray-700 cursor-pointer">
                 Tôi đồng ý với các <a href="#" className="text-green-600 hover:underline font-medium">Điều khoản dịch vụ</a>
               </label>
@@ -205,7 +192,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg shadow-green-200"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg shadow-green-200 disabled:opacity-70"
             >
               {loading ? 'Đang xử lý...' : 'ĐĂNG KÝ TÀI KHOẢN'}
               {!loading && <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />}

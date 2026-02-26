@@ -5,16 +5,20 @@ import Link from 'next/link';
 import { useCartStore } from '@/store/useCartStore';
 import { formatCurrency } from '@/utils/vi';
 import { useRouter } from 'next/navigation';
-// 1. Dùng Context thay vì Store cũ
 import { useAuth } from '@/context/AuthContext';
 import { ShoppingCart, Trash2, Minus, Plus, ArrowRight, Check } from 'lucide-react';
 import Image from 'next/image';
 
 export default function CartPage() {
   const router = useRouter();
-  const { user } = useAuth(); // Lấy thông tin user
+  const { user } = useAuth();
   
-  const { items, removeFromCart, updateQuantity, clearCart } = useCartStore();
+  // Lấy dữ liệu từ store mới
+  const { carts, activeUserId, removeFromCart, updateQuantity, clearCart } = useCartStore();
+  
+  // Trích xuất đúng giỏ hàng của user hiện tại
+  const items = carts[activeUserId] || [];
+  
   const [mounted, setMounted] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
@@ -50,9 +54,15 @@ export default function CartPage() {
     }
   };
 
+  // Tính tổng tiền DỰA TRÊN các item ĐÃ CHỌN
   const selectedTotal = items
     .filter((item) => selectedItems.includes(item.id))
     .reduce((total, item) => total + item.price * item.quantity, 0);
+    
+  // Tính tổng số lượng DỰA TRÊN các item ĐÃ CHỌN
+  const selectedQuantity = items
+    .filter((item) => selectedItems.includes(item.id))
+    .reduce((total, item) => total + item.quantity, 0);
 
   if (!mounted) return <div className="min-h-screen flex items-center justify-center text-gray-500">Đang tải giỏ hàng...</div>;
 
@@ -74,7 +84,7 @@ export default function CartPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <h1 className="text-3xl font-bold mb-8 text-gray-900 flex items-center gap-3">
-        <ShoppingCart className="text-green-600"/> Giỏ hàng <span className="text-lg font-normal text-gray-500">({items.length} sản phẩm)</span>
+        <ShoppingCart className="text-green-600"/> Giỏ hàng <span className="text-lg font-normal text-gray-500">({items.length} mặt hàng)</span>
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -117,7 +127,7 @@ export default function CartPage() {
                 />
                 <div className="relative w-24 h-24 flex-shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
                   <Image
-                    src={Array.isArray(item.images) ? item.images[0] : item.images || '/placeholder.png'}
+                    src={Array.isArray(item.images) ? item.images[0] : item.images || '/images/placeholder.jpg'}
                     alt={item.name}
                     fill
                     className="object-cover"
@@ -172,7 +182,7 @@ export default function CartPage() {
 
             <div className="space-y-3 mb-6">
                <div className="flex justify-between text-gray-600 text-sm">
-                 <span>Tạm tính ({selectedItems.length} món):</span>
+                 <span>Tạm tính ({selectedQuantity} kg):</span>
                  <span className="font-medium text-gray-900">{formatCurrency(selectedTotal)}</span>
                </div>
                <div className="flex justify-between text-gray-600 text-sm">

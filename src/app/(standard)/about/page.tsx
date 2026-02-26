@@ -29,41 +29,42 @@ export default function AboutPage() {
   ];
 
   return (
-    <div className="bg-white">
-      <section className="relative h-[400px] bg-gray-900 text-white">
+    <div className="bg-white min-h-screen font-sans">
+      
+      {/* --- BANNER ĐẦU TRANG ĐỒNG BỘ VỚI CONTACT & PRODUCTS --- */}
+      <div className="relative w-full h-[35vh] min-h-[250px] flex items-center justify-center">
         <Image
-          src="/images/nongsan/about-banner.jpg" 
-          alt="Vườn rau hữu cơ"
-          layout="fill"
-          objectFit="cover"
-          className="opacity-50"
+          src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=2574&auto=format&fit=crop" // Ảnh cánh đồng tuyệt đẹp
+          alt="Về Agri Connect"
+          fill
+          className="object-cover"
         />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Container className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold">Về Agri-Ecommerce</h1>
-            <p className="mt-4 text-lg max-w-2xl mx-auto">
-              Mang tinh hoa nông sản Việt sạch, an toàn và tươi ngon nhất đến mọi gia đình.
-            </p>
-          </Container>
+        <div className="absolute inset-0 bg-black/50"></div> {/* Lớp phủ tối để nổi bật Header và Chữ */}
+        <div className="relative z-10 text-center text-white mt-16 px-4">
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">Về Agri Connect</h1>
+          <p className="mt-4 text-lg opacity-90 max-w-2xl mx-auto">
+            Mang tinh hoa nông sản Việt sạch, an toàn và tươi ngon nhất đến mọi gia đình.
+          </p>
         </div>
-      </section>
+      </div>
+      {/* -------------------------------------------------------- */}
 
       <section className="py-16 md:py-24">
         <Container>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-            <div className="relative w-full h-80 rounded-lg overflow-hidden shadow-lg">
+            <div className="relative w-full h-80 rounded-xl overflow-hidden shadow-lg">
               <Image
                 src="/images/nongsan/farmer.jpg"
                 alt="Người nông dân"
-                layout="fill"
-                objectFit="cover"
+                fill
+                className="object-cover hover:scale-105 transition-transform duration-700"
               />
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">Sứ Mệnh Của Chúng Tôi</h2>
+              <h2 className="text-3xl font-bold text-gray-800 mb-6">Sứ Mệnh Của Chúng Tôi</h2>
               <p className="text-gray-600 leading-relaxed mb-4">
                 Chúng tôi tin rằng mọi người xứng đáng được thưởng thức những sản phẩm nông nghiệp
-                tươi ngon và an toàn nhất. Sứ mệnh của Agri-Ecommerce là xây dựng cầu nối
+                tươi ngon và an toàn nhất. Sứ mệnh của Agri Connect là xây dựng cầu nối
                 bền vững giữa những người nông dân tâm huyết và người tiêu dùng thành thị.
               </p>
               <p className="text-gray-600 leading-relaxed">
@@ -83,27 +84,47 @@ export default function AboutPage() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {values.map((value) => (
-              <div key={value.title} className="text-center p-6 bg-white rounded-lg shadow-sm">
-                <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mx-auto mb-4">
+              <div key={value.title} className="text-center p-8 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mx-auto mb-6">
                   {value.icon}
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">{value.title}</h3>
-                <p className="text-sm text-gray-600">{value.description}</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">{value.title}</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">{value.description}</p>
               </div>
             ))}
           </div>
         </Container>
       </section>
 
+      {/* --- QUY TRÌNH TIMELINE ĐẸP MẮT --- */}
       <section className="py-16 md:py-24">
          <Container>
-          <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
+          <h2 className="text-3xl font-bold text-center text-gray-800 mb-16">
             Quy Trình Của Chúng Tôi
           </h2>
-           {/*có thể thêm một sơ đồ/timeline đơn giản */}
-           <div className="text-center text-gray-500">
-             {/* (Nội dung về quy trình: Thu hoạch -> Kiểm định -> Đóng gói -> Vận chuyển) */}
+           
+           <div className="max-w-4xl mx-auto relative px-4">
+             {/* Đường kẻ ngang kết nối các bước (Chỉ hiện trên desktop) */}
+             <div className="hidden md:block absolute top-6 left-12 right-12 h-1 bg-green-100 -z-10"></div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+               {['Thu hoạch', 'Kiểm định', 'Đóng gói', 'Vận chuyển'].map((step, idx) => (
+                 <div key={idx} className="flex flex-col items-center text-center relative group">
+                    <div className="w-14 h-14 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-xl mb-4 border-4 border-white shadow-md group-hover:scale-110 transition-transform duration-300">
+                       {idx + 1}
+                    </div>
+                    <h3 className="font-semibold text-gray-800 text-lg mb-2">{step}</h3>
+                    <p className="text-sm text-gray-500">
+                      {idx === 0 && 'Tuyển chọn kỹ lưỡng tại vườn'}
+                      {idx === 1 && 'Đạt chuẩn an toàn thực phẩm'}
+                      {idx === 2 && 'Vật liệu bảo vệ môi trường'}
+                      {idx === 3 && 'Giao hàng hỏa tốc 24h'}
+                    </p>
+                 </div>
+               ))}
+             </div>
            </div>
+
          </Container>
       </section>
     </div>

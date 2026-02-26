@@ -1,66 +1,149 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware'; 
-import { Product } from '@/data/mockData';
+import { persist } from 'zustand/middleware';
 
-interface CartItem extends Product {
+export interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  images: string[];
+  slug?: string;
   quantity: number;
+  stock?: number;
 }
 
 interface CartState {
-  items: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
+  // Lưu trữ giỏ hàng của TẤT CẢ user. Khóa là UserID (hoặc 'guest')
+  carts: Record<string, CartItem[]>;
+  activeUserId: string; // ID của user đang đăng nhập, mặc định là 'guest'
+
+  // Actions
+  setActiveUser: (userId: string | null) => void;
+  addToCart: (product: any, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  getTotalPrice: () => number;
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
-      items: [],
-      
-      addToCart: (product, quantity = 1) => {
-        const currentItems = get().items;
-        const existingItem = currentItems.find((item) => item.id === product.id);
-
-        if (existingItem) {
-          set({
-            items: currentItems.map((item) =>
-              item.id === product.id
-                ? { ...item, quantity: item.quantity + quantity }
-                : item
-            ),
-          });
-        } else {
-          set({ items: [...currentItems, { ...product, quantity }] });
-        }
+      carts: {
+        'guest': []
       },
+      activeUserId: 'guest',
 
-      removeFromCart: (productId) => {
-        set({ items: get().items.filter((item) => item.id !== productId) });
-      },
+      // 1. Cập nhật User đang hoạt động
+      setActiveUser: (userId) => {
+        const id = userId || 'guest';
+        set((state) => {
+          // Nếu chuyển từ 'guest' sang 1 tài khoản User thực sự
+          if (state.activeUserId === 'guest' && id !== 'guest') {
+            const guestCart = state.carts['guest'] || [];
+            const userCart = state.carts[id] || [];
 
-      updateQuantity: (productId, quantity) => {
-        if (quantity <= 0) {
-            get().removeFromCart(productId);
-            return;
-        }
-        set({
-          items: get().items.map((item) =>
-            item.id === productId ? { ...item, quantity } : item
-          ),
+            // GỘP GIỎ HÀNG: Mang đồ từ guest sang tài khoản vừa đăng nhập
+            let mergedCart = [...userCart];
+            guestCart.forEach(gItem => {
+              const existingIndex = mergedCart.findIndex(uItem => uItem.id === gItem.id);
+              if (existingIndex >= 0) {
+                mergedCart[existingIndex].quantity += gItem.quantity;
+              } else {
+                mergedCart.push(gItem);
+              }
+            });
+
+            return {
+              activeUserId: id,
+              carts: {
+                ...state.carts,
+                [id]: mergedCart, // Cập nhật giỏ mới cho user
+                'guest': [] // Xóa sạch giỏ guest
+              }
+            };
+          }
+
+          // Trường hợp đăng xuất (về lại guest) hoặc load trang
+          return {
+            activeUserId: id,
+            carts: {
+              ...state.carts,
+              [id]: state.carts[id] || []
+            }
+          };
         });
       },
 
-      clearCart: () => set({ items: [] }),
+      // 2. Thêm vào giỏ
+      addToCart: (product, quantity) => set((state) => {
+        const userId = state.activeUserId;
+        const currentCart = state.carts[userId] || [];
+        const existingItemIndex = currentCart.findIndex((item) => item.id === product.id);
 
-      getTotalPrice: () => {
-        return get().items.reduce((total, item) => total + item.price * item.quantity, 0);
-      },
+        // ÉP KIỂU SỐ LƯỢNG ĐỂ CHỐNG LỖI NaN
+        const validQty = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1;
+        const validPrice = Number(product.price) || 0; // Đảm bảo giá cũng là số
+
+        let updatedCart;
+        if (existingItemIndex >= 0) {
+          updatedCart = [...currentCart];
+          // Đảm bảo item.quantity cũ cũng là số trước khi cộng
+          const oldQty = Number(updatedCart[existingItemIndex].quantity) || 0;
+          updatedCart[existingItemIndex].quantity = oldQty + validQty;
+        } else {
+          updatedCart = [...currentCart, {
+            ...product,
+            price: validPrice,
+            quantity: validQty,
+            // Chống lỗi nếu images không phải mảng
+            images: Array.isArray(product.images) ? product.images : [product.images || '/images/placeholder.jpg']
+          }];
+        }
+
+        return {
+          carts: { ...state.carts, [userId]: updatedCart }
+        };
+      }),
+
+      // 3. Xóa khỏi giỏ
+      removeFromCart: (productId) => set((state) => {
+        const userId = state.activeUserId;
+        const currentCart = state.carts[userId] || [];
+        return {
+          carts: {
+            ...state.carts,
+            [userId]: currentCart.filter(item => item.id !== productId)
+          }
+        };
+      }),
+
+      // 4. Cập nhật số lượng
+      updateQuantity: (productId, quantity) => set((state) => {
+        const userId = state.activeUserId;
+        const currentCart = state.carts[userId] || [];
+
+        // Không cho số lượng giảm xuống dưới 1
+        const validQty = Math.max(1, (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1);
+
+        return {
+          carts: {
+            ...state.carts,
+            [userId]: currentCart.map(item =>
+              item.id === productId ? { ...item, quantity: validQty } : item
+            )
+          }
+        };
+      }),
+
+      // 5. Xóa sạch giỏ
+      clearCart: () => set((state) => {
+        const userId = state.activeUserId;
+        return {
+          carts: { ...state.carts, [userId]: [] }
+        };
+      })
     }),
     {
-      name: 'agri-cart-storage', // Tên key trong LocalStorage
+      name: 'agri-cart-storage', // Tên lưu trong LocalStorage
     }
   )
 );

@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import axios from 'axios';
 
+import { useCartStore } from '@/store/useCartStore';
+
 // Định nghĩa User khớp với Backend
 interface User {
   id: string;
@@ -21,7 +23,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-const API_URL = 'http://localhost:3000';
+const API_URL = 'http://localhost:3001';
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -40,11 +42,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
 
+          // ---> THÊM MỚI 1: Khi F5 load lại trang, gán đúng giỏ hàng của User này
+          useCartStore.getState().setActiveUser(parsedUser.id);
+
           // Logic bảo vệ route: Nếu là Seller mà đang ở trang Buyer -> Đẩy về Dashboard
           if (parsedUser.role === 'SELLER' && !pathname.startsWith('/dashboard')) {
-             // Tùy chọn: Có thể uncomment dòng dưới nếu muốn ép Seller luôn ở dashboard
              // router.replace('/dashboard'); 
           }
+        } else {
+          // ---> THÊM MỚI 2: Nếu chưa đăng nhập, đảm bảo giỏ hàng là của Guest
+          useCartStore.getState().setActiveUser('guest');
         }
       } catch (error) {
         console.error("Lỗi khôi phục phiên:", error);
@@ -54,10 +61,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
     checkAuth();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 2. Hàm Login: Sửa lại Logic điều hướng
-const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string) => {
     setIsLoading(true);
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
@@ -71,6 +78,9 @@ const login = async (email: string, pass: string) => {
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('agri_user', JSON.stringify(user));
       setUser(user);
+
+      // ---> THÊM MỚI 3: Vừa đăng nhập xong -> Chuyển từ Guest sang User, đồng thời gộp giỏ hàng!
+      useCartStore.getState().setActiveUser(user.id);
 
       // --- LOGIC REDIRECT QUAN TRỌNG ---
       // 1. Chuyển role về chữ in hoa để so sánh cho chắc chắn
@@ -101,6 +111,9 @@ const login = async (email: string, pass: string) => {
     setUser(null);
     localStorage.removeItem('agri_user');
     localStorage.removeItem('access_token');
+    
+    // ---> THÊM MỚI 4: Vừa đăng xuất -> Chuyển giỏ hàng về lại chế độ Guest (Trống)
+    useCartStore.getState().setActiveUser('guest');
     
     // Dùng replace để không back lại được
     router.replace('/login'); 

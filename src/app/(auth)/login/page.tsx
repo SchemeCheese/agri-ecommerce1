@@ -1,18 +1,18 @@
+// src/app/(auth)/login/page.tsx
 "use client";
 
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-// 1. Thay thế Store cũ bằng Context mới
 import { useAuth } from '@/context/AuthContext';
 import { Mail, Lock, ArrowRight, User, Store } from 'lucide-react';
 
 function LoginContent() {
-  // const router = useRouter(); // Context đã tự xử lý redirect nên không cần router ở đây nữa (trừ khi cần custom)
-  // const searchParams = useSearchParams(); // Context xử lý logic role
+  const router = useRouter(); 
+  const searchParams = useSearchParams(); 
+  const returnUrl = searchParams.get('returnUrl'); // Lấy đường dẫn cũ (nếu có)
   
-  // 2. Lấy hàm login từ Context
   const { login } = useAuth();
   
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -24,24 +24,26 @@ function LoginContent() {
     setLoading(true);
     setError('');
 
-    // 3. Gọi hàm login từ Context (Logic mới)
+    // Gọi hàm login từ Context 
     const success = await login(formData.email, formData.password);
     
     if (success) {
-      // Context tự chuyển trang (Buyer -> Home, Seller -> Dashboard)
-      // alert("Đăng nhập thành công!"); // Có thể bỏ alert cho mượt
+      // Nếu có returnUrl (ví dụ từ giỏ hàng chuyển sang) thì quay lại đó
+      if (returnUrl) {
+         router.push(returnUrl);
+      }
+      // Nếu không có, Context đã tự động xử lý redirect (Buyer -> Home, Seller -> Dashboard)
     } else {
-      setError('Email hoặc mật khẩu không đúng!');
+      setError('Email hoặc mật khẩu không chính xác!');
       setLoading(false);
     }
   };
 
-  // 4. Hàm hỗ trợ điền nhanh (Demo)
   const fillCredential = (type: 'buyer' | 'seller') => {
     if (type === 'buyer') {
-      setFormData({ email: 'khach@gmail.com', password: '123' });
+      setFormData({ email: 'khach@gmail.com', password: '123456' }); // Sửa lại pass cho khớp với file seed.ts
     } else {
-      setFormData({ email: 'shop@gmail.com', password: '123' });
+      setFormData({ email: 'shop1@gmail.com', password: '123456' }); // Sửa lại email/pass của Shop
     }
     setError('');
   };
@@ -49,7 +51,7 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex bg-white font-sans"> 
       
-      {/* --- CỘT TRÁI: ẢNH (GIỮ NGUYÊN) --- */}
+      {/* --- CỘT TRÁI: ẢNH --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">
         <Image 
           src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop" 
@@ -75,12 +77,12 @@ function LoginContent() {
             </p>
           </div>
 
-          {/* --- THÊM: NÚT TEST NHANH (Hòa hợp với giao diện) --- */}
+          {/* --- NÚT TEST NHANH --- */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-             <button onClick={() => fillCredential('buyer')} className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition border border-blue-100">
+             <button type="button" onClick={() => fillCredential('buyer')} className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition border border-blue-100">
                 <User size={16} /> Test Khách
              </button>
-             <button onClick={() => fillCredential('seller')} className="flex items-center justify-center gap-2 py-2 px-4 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition border border-green-100">
+             <button type="button" onClick={() => fillCredential('seller')} className="flex items-center justify-center gap-2 py-2 px-4 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition border border-green-100">
                 <Store size={16} /> Test Chủ Shop
              </button>
           </div>

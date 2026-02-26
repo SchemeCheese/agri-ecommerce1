@@ -14,9 +14,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
-        router.push('/login'); // Chưa login -> Về login
+        router.push('/login'); 
       } else if (user.role !== 'SELLER') {
-        router.push('/'); // Login rồi mà không phải seller -> Về trang chủ
+        router.push('/'); 
       }
     }
   }, [user, isLoading, router]);
