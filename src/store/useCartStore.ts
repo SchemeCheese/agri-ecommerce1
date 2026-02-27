@@ -9,6 +9,8 @@ export interface CartItem {
   slug?: string;
   quantity: number;
   stock?: number;
+  seller_id: string; 
+  unit: string;
 }
 
 interface CartState {

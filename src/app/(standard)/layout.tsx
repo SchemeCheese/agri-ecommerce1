@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation"; 
 import { Header } from "@/components/layouts/Header";
-import { HeaderSecondary } from "@/components/layouts/HeaderSecondary";
+import HeaderSecondary from "@/components/layouts/HeaderSecondary";
 import { Footer } from "@/components/layouts/Footer";
 
 export default function StandardLayout({

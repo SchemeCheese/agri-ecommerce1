@@ -79,19 +79,23 @@ export default function ProductClient({ product, allProducts }: { product: any, 
   // Lọc sản phẩm gợi ý từ biến allProducts
   const relatedProducts = allProducts.filter(p => p.category === product.category && p.id !== product.id).slice(0, 6);
 
+  // Tìm đến hàm này và cập nhật object truyền vào addToCart
   const handleAddToCart = () => {
-    addToCart({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      images: product.images,
-      slug: product.slug,
-      category: product.category,
-      origin: product.origin,
-      seasons: product.seasons || [],
-      description: product.description
-    }, quantity);
-    alert("Đã thêm vào giỏ hàng!");
+    // Truyền 2 tham số riêng biệt theo đúng yêu cầu của Store
+    addToCart(
+      {
+        id: product.id,
+        name: product.name,
+        price: Number(product.price),
+        images: product.images,
+        unit: product.unit,
+        seller_id: product.seller_id,
+        slug: product.slug,
+      },
+      quantity // Tham số thứ 2 là số lượng
+    );
+
+    alert(`Đã thêm ${quantity} ${product.unit} ${product.name} vào giỏ hàng!`);
   };
 
   return (
@@ -264,7 +268,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
                     <RatingStars rating={review.rating} />
                     <div className="text-xs text-gray-400 mt-1">{new Date(review.date).toLocaleDateString('vi-VN')} | Phân loại mặc định</div>
                     <div className="mt-3 text-gray-700 text-sm">{review.comment}</div>
-                    
+
                     {/* Ảnh review nếu có */}
                     {review.images && review.images.length > 0 && (
                       <div className="mt-3 flex gap-2 overflow-x-auto">
