@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCartStore } from '@/store/useCartStore';
@@ -10,6 +11,13 @@ import {
   MapPin, MessageCircle, Store, ChevronRight, ThumbsUp
 } from 'lucide-react';
 import { ChatWidget } from '@/components/home/ChatWidget';
+
+const BACKEND_URL = 'http://localhost:3001';
+const fixImg = (url: string) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+};
 
 // --- SUB-COMPONENT: Rating Stars ---
 const RatingStars = ({ rating }: { rating: number }) => (
@@ -30,7 +38,7 @@ const ShopInfoCard = ({ shop }: { shop: any }) => (
     {/* Avatar & Tên */}
     <div className="flex items-center gap-4 border-r border-gray-100 pr-6 min-w-[300px]">
       <div className="relative w-16 h-16 rounded-full overflow-hidden border">
-        <Image src={shop.avatar || '/images/shop-placeholder.jpg'} alt={shop.name} fill className="object-cover" />
+        <Image src={fixImg(shop.avatar || '')} alt={shop.name} fill className="object-cover" />
       </div>
       <div>
         <h3 className="font-bold text-gray-900">{shop.name}</h3>
@@ -38,12 +46,12 @@ const ShopInfoCard = ({ shop }: { shop: any }) => (
           <MapPin size={12} /> {shop.location}
         </p>
         <div className="flex gap-2 mt-2">
-          <button className="flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded border border-green-200 font-medium">
+          <Link href={`/chat?sellerId=${shop.id}`} className="flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded border border-green-200 font-medium">
             <MessageCircle size={12} /> Chat ngay
-          </button>
-          <button className="flex items-center gap-1 text-xs bg-white text-gray-700 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">
+          </Link>
+          <Link href={`/shop/${shop.id}`} className="flex items-center gap-1 text-xs bg-white text-gray-700 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">
             <Store size={12} /> Xem Shop
-          </button>
+          </Link>
         </div>
       </div>
     </div>
@@ -72,6 +80,13 @@ export default function ProductClient({ product, allProducts }: { product: any, 
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const addToCart = useCartStore((state) => state.addToCart);
+  const router = useRouter();
+
+  const handleBuyNow = () => {
+    router.push(
+      `/checkout?bn=1&id=${encodeURIComponent(product.id)}&qty=${quantity}&price=${encodeURIComponent(product.price)}&sellerId=${encodeURIComponent(product.seller_id || '')}&name=${encodeURIComponent(product.name)}&img=${encodeURIComponent(fixImg(product.images?.[0] || ''))}&unit=${encodeURIComponent(product.unit || '')}`
+    );
+  };
 
   // Lọc sản phẩm cùng Shop từ biến allProducts
   const shopProducts = allProducts.filter(p => p.shop?.id === product.shop?.id && p.id !== product.id).slice(0, 6);
@@ -87,10 +102,9 @@ export default function ProductClient({ product, allProducts }: { product: any, 
         id: product.id,
         name: product.name,
         price: Number(product.price),
-        images: product.images,
-        unit: product.unit,
+        images: product.images?.map(fixImg) ?? [],
+        slug: product.id,
         seller_id: product.seller_id,
-        slug: product.slug,
       },
       quantity // Tham số thứ 2 là số lượng
     );
@@ -107,7 +121,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
         <div className="md:col-span-5 space-y-4">
           <div className="relative aspect-square w-full rounded-lg overflow-hidden border">
             <Image
-              src={product.images[activeImage] || '/images/placeholder.jpg'}
+              src={fixImg(product.images[activeImage])}
               alt={product.name}
               fill
               className="object-cover"
@@ -120,7 +134,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
                 onMouseEnter={() => setActiveImage(idx)}
                 className={`relative w-20 h-20 border-2 rounded cursor-pointer shrink-0 ${activeImage === idx ? 'border-green-600' : 'border-transparent'}`}
               >
-                <Image src={img} alt="thumb" fill className="object-cover rounded-sm" />
+                <Image src={fixImg(img)} alt="thumb" fill className="object-cover rounded-sm" />
               </div>
             ))}
           </div>
@@ -203,7 +217,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
             >
               <ShoppingCart size={20} /> Thêm vào giỏ hàng
             </button>
-            <button className="flex-1 bg-green-600 text-white py-3 rounded-md font-bold hover:bg-green-700 transition">
+            <button onClick={handleBuyNow} className="flex-1 bg-green-600 text-white py-3 rounded-md font-bold hover:bg-green-700 transition">
               Mua ngay
             </button>
           </div>
@@ -297,7 +311,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
           <h2 className="text-lg font-bold text-gray-800 uppercase border-l-4 border-green-600 pl-3">
             Sản phẩm khác của Shop
           </h2>
-          <Link href={`/shop/${product.shop.id}`} className="text-green-600 text-sm hover:underline flex items-center gap-1">
+          <Link href={`/shop/${product.seller_id || product.shop?.id}`} className="text-green-600 text-sm hover:underline flex items-center gap-1">
             Xem tất cả <ChevronRight size={14} />
           </Link>
         </div>
@@ -305,9 +319,9 @@ export default function ProductClient({ product, allProducts }: { product: any, 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {shopProducts.map((p: any) => (
             <div key={p.id} className="bg-white rounded-lg shadow-sm hover:shadow-md transition overflow-hidden border border-gray-100 group">
-              <Link href={`/products/${p.slug}`}>
+              <Link href={`/products/${p.id}`}>
                 <div className="relative aspect-square w-full">
-                  <Image src={p.images[0] || '/images/placeholder.jpg'} alt={p.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <Image src={fixImg(p.images?.[0] ?? '')} alt={p.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
                 <div className="p-3">
                   <h3 className="text-sm text-gray-800 line-clamp-2 min-h-[40px] mb-2 group-hover:text-green-600 transition-colors">
@@ -334,9 +348,9 @@ export default function ProductClient({ product, allProducts }: { product: any, 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {relatedProducts.map((p: any) => (
             <div key={p.id} className="bg-white rounded-lg shadow-sm hover:shadow-md transition overflow-hidden border border-gray-100 group">
-              <Link href={`/products/${p.slug}`}>
+              <Link href={`/products/${p.id}`}>
                 <div className="relative aspect-square w-full">
-                  <Image src={p.images[0] || '/images/placeholder.jpg'} alt={p.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <Image src={fixImg(p.images?.[0] ?? '')} alt={p.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
                 <div className="p-3">
                   <h3 className="text-sm text-gray-800 line-clamp-2 min-h-[40px] mb-2 group-hover:text-green-600 transition-colors">

@@ -3,17 +3,28 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Star, Reply, ThumbsUp, MoreHorizontal, CheckCircle2, Store } from 'lucide-react';
+import { Star, Reply, MoreHorizontal, CheckCircle2, Store, Send, Loader2 } from 'lucide-react';
+import type { SellerReview } from '@/hooks/useSellerReviews';
 
 interface ReviewProps {
-  review: any;
-  onReply: (id: string) => void;
+  review: SellerReview;
+  onReply: (id: string, reply: string) => Promise<void>;
 }
 
 export const ReviewCard = ({ review, onReply }: ReviewProps) => {
-  // Giả lập trạng thái (bạn có thể thay bằng dữ liệu thật)
-  const isReplied = Math.random() > 0.5; 
+  const isReplied = !!review.seller_reply;
   const [isExpanded, setIsExpanded] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replying, setReplying] = useState(false);
+
+  const handleSubmitReply = async () => {
+    if (!replyText.trim()) return;
+    setReplying(true);
+    await onReply(review.id, replyText.trim());
+    setReplyText('');
+    setIsExpanded(false);
+    setReplying(false);
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col">
@@ -23,11 +34,11 @@ export const ReviewCard = ({ review, onReply }: ReviewProps) => {
         <div className="flex items-center gap-3">
           {/* Avatar nhỏ gọn */}
           <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
-            {review.userName.charAt(0)}
+            {review.buyer?.full_name?.charAt(0) ?? '?'}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-gray-900 leading-none">{review.userName}</span>
-            <span className="text-[10px] text-gray-400 mt-0.5">{review.date} • Phân loại: Hộp 500g</span>
+            <span className="text-sm font-bold text-gray-900 leading-none">{review.buyer?.full_name ?? 'Người dùng'}</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{new Date(review.created_at).toLocaleDateString('vi-VN')}</span>
           </div>
         </div>
 
@@ -82,17 +93,39 @@ export const ReviewCard = ({ review, onReply }: ReviewProps) => {
                 <div className="flex items-center gap-2 mb-1">
                    <Store size={14} className="text-blue-600"/>
                    <span className="text-xs font-bold text-blue-900">Phản hồi của Shop</span>
-                   <span className="text-[10px] text-gray-400">• Vừa xong</span>
                 </div>
-                <p className="text-xs text-gray-700 leading-relaxed">
-                   Cảm ơn bạn đã tin tưởng ủng hộ Nông Trại Cầu Đất ạ! Hy vọng bạn sẽ tiếp tục ủng hộ shop trong những đơn hàng tiếp theo nhé ❤️
-                </p>
+                <p className="text-xs text-gray-700 leading-relaxed">{review.seller_reply}</p>
+             </div>
+           ) : isExpanded ? (
+             <div className="mt-2 space-y-2">
+               <textarea
+                 rows={3}
+                 value={replyText}
+                 onChange={e => setReplyText(e.target.value)}
+                 placeholder="Nhập phản hồi của shop..."
+                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 resize-none"
+               />
+               <div className="flex gap-2">
+                 <button
+                   onClick={handleSubmitReply}
+                   disabled={replying || !replyText.trim()}
+                   className="flex items-center gap-1.5 bg-green-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-60 transition"
+                 >
+                   {replying ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
+                   Gửi phản hồi
+                 </button>
+                 <button
+                   onClick={() => setIsExpanded(false)}
+                   className="text-xs text-gray-500 font-bold px-3 py-2 rounded-lg hover:bg-gray-100 transition"
+                 >
+                   Hủy
+                 </button>
+               </div>
              </div>
            ) : (
-             // Nút reply nhanh nếu chưa trả lời
              <div className="mt-2">
-               <button 
-                 onClick={() => onReply(review.id)}
+               <button
+                 onClick={() => setIsExpanded(true)}
                  className="flex items-center gap-2 text-sm text-green-600 font-bold hover:bg-green-50 px-3 py-1.5 rounded-lg w-fit transition-colors"
                >
                  <Reply size={16}/> Viết phản hồi ngay
@@ -106,14 +139,14 @@ export const ReviewCard = ({ review, onReply }: ReviewProps) => {
            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex gap-3 items-center hover:bg-white hover:shadow-md hover:border-green-200 transition-all cursor-pointer group h-full">
               {/* Ảnh to hơn (w-20) */}
               <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 shrink-0 bg-white">
-                 <Image src={review.productImage} alt="sp" fill className="object-cover group-hover:scale-105 transition-transform" />
+                 {review.products?.[0]?.images?.[0] && <Image src={review.products[0].images[0]} alt="sp" fill className="object-cover group-hover:scale-105 transition-transform" />}
               </div>
               <div className="min-w-0 flex flex-col justify-center h-full">
                  <p className="text-[10px] text-gray-400 uppercase font-bold mb-1 flex items-center gap-1">
                     <PackageIcon /> Sản phẩm
                  </p>
                  <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-green-700 transition-colors">
-                    {review.productName}
+                    {review.products?.[0]?.name}
                  </h4>
                  {/* Giá hoặc SKU (Giả lập) */}
                  <p className="text-xs text-gray-500 mt-1">SKU: SP-{review.id.slice(0,4)}</p>

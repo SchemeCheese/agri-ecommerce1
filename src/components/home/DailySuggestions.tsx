@@ -1,15 +1,33 @@
 // src/components/home/DailySuggestions.tsx
-import React from 'react';
+'use client';
+import React, { useState, useEffect } from 'react';
 import { Container } from '@/components/ui/Container';
-import { ProductCard } from './ProductCard'; // Giữ nguyên nếu ProductCard nằm cùng thư mục hoặc chỉnh lại path nếu cần
-import { MOCK_PRODUCTS, MOCK_USER_HISTORY } from '@/data'; // Đã sửa import
-import { Sparkles } from 'lucide-react';
+import { ProductCard } from './ProductCard';
+import { Sparkles, Loader2 } from 'lucide-react';
+import { formatCurrency } from '@/utils/vi';
+import api from '@/lib/axios';
+
+const BACKEND_URL = 'http://localhost:3001';
+const fixImg = (url: string) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+};
 
 export const DailySuggestions = () => {
-  // Logic gợi ý: Lọc các sản phẩm có category trùng với lịch sử tìm kiếm
-  const suggestedProducts = MOCK_PRODUCTS.filter(p => 
-    MOCK_USER_HISTORY.includes(p.category)
-  ).slice(0, 8); 
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    api.get('/products')
+      .then(res => {
+        // Lấy 8 sản phẩm ngẫu nhiên làm gợi ý
+        const shuffled = [...res.data].sort(() => 0.5 - Math.random());
+        setProducts(shuffled.slice(0, 8));
+      })
+      .catch(err => console.error('DailySuggestions fetch error:', err))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <section className="py-16 bg-white">
@@ -19,28 +37,30 @@ export const DailySuggestions = () => {
           <h2 className="text-3xl font-bold text-gray-900">Gợi Ý Hôm Nay</h2>
         </div>
 
-        {suggestedProducts.length > 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="animate-spin text-green-600" size={32}/>
+          </div>
+        ) : products.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {suggestedProducts.map((product) => (
-               <ProductCard
-                  key={product.id}
-                  id={product.id}
-                  slug={product.slug} 
-                  imageUrl={product.images[0]}
-                  title={product.name}
-                  description={product.description}
-                  price={formatCurrency(product.price)} // Lưu ý: Hàm formatCurrency cần import từ utils
-                  rawPrice={product.price}
-                />
+            {products.map((product) => (
+              <ProductCard
+                key={product.id}
+                id={product.id}
+                slug={product.id}
+                imageUrl={fixImg(product.images?.[0] ?? '')}
+                title={product.name}
+                description={product.description}
+                price={formatCurrency(product.price)}
+                rawPrice={product.price}
+                unit={product.unit}
+              />
             ))}
           </div>
         ) : (
-          <p className="text-center text-gray-500">Chưa có gợi ý phù hợp cho bạn.</p>
+          <p className="text-center text-gray-500">Chưa có sản phẩm nào.</p>
         )}
       </Container>
     </section>
   );
 };
-
-// Cần import thêm formatCurrency nếu chưa có
-import { formatCurrency } from '@/utils/vi';

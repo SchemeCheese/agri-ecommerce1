@@ -1,16 +1,21 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container'; 
 import { ProductCard } from './ProductCard';
 
 const ITEMS_PER_PAGE = 6;
-const API_URL = 'http://localhost:3001/products'; // Địa chỉ API Backend
+const BACKEND_URL = 'http://localhost:3001';
+
+const fixImageUrl = (url: string) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+};
 
 const CATEGORIES = [
   { id: 'all', label: 'Tất cả' },
-  // Chú ý: Backend trả về 'Trái cây', 'Rau củ' (chữ thường hoặc hoa tuỳ bạn config, ở đây map theo tên trả về)
   { id: 'Trái cây', label: 'Trái cây' },
   { id: 'Rau củ', label: 'Rau củ' },
   { id: 'Ngũ cốc', label: 'Ngũ cốc & Hạt' },
@@ -29,7 +34,7 @@ export const ProductList = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await axios.get(API_URL);
+        const response = await api.get('/products');
         setProducts(response.data);
       } catch (error) {
         console.error("Lỗi khi tải sản phẩm:", error);
@@ -100,13 +105,13 @@ export const ProductList = () => {
               <ProductCard
                 key={product.id} 
                 id={product.id} 
-                imageUrl={product.images[0]} 
+                imageUrl={fixImageUrl(product.images?.[0] ?? '')} 
                 title={product.name}
                 description={product.description}
-                price={`${product.price.toLocaleString('vi-VN')}đ / kg`}
+                price={`${Number(product.price).toLocaleString('vi-VN')}đ / ${product.unit || 'kg'}`}
                 rawPrice={product.price} 
-                slug={product.slug}
-                category={product.category as any} // Ép kiểu tạm thời
+                slug={product.id}
+                category={product.category as any}
               />
             ))
           ) : (

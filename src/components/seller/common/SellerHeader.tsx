@@ -1,15 +1,27 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Bell, Search, ChevronDown } from 'lucide-react';
+import api from '@/lib/axios';
 
 export const SellerHeader = () => {
+  const [storeName, setStoreName] = useState('');
+
+  useEffect(() => {
+    api.get('/profile/me')
+      .then(res => {
+        const name = res.data?.profile?.store_name || res.data?.full_name || 'Shop của bạn';
+        setStoreName(name);
+      })
+      .catch(() => setStoreName('Shop của bạn'));
+  }, []);
+
   return (
     <header className="h-20 px-8 flex items-center justify-between sticky top-0 z-20 bg-gray-50/80 backdrop-blur-xl border-b border-gray-200/50">
       
       {/* Breadcrumb / Title Context */}
       <div>
-         <h2 className="text-xl font-bold text-gray-800">Xin chào, Nông Trại Cầu Đất 👋</h2>
+         <h2 className="text-xl font-bold text-gray-800">Xin chào, {storeName || '...'} 👋</h2>
       </div>
 
       {/* Actions */}

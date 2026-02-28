@@ -22,6 +22,7 @@ interface CartState {
   setActiveUser: (userId: string | null) => void;
   addToCart: (product: any, quantity: number) => void;
   removeFromCart: (productId: string) => void;
+  removeItems: (productIds: string[]) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
 }
@@ -114,6 +115,18 @@ export const useCartStore = create<CartState>()(
           carts: {
             ...state.carts,
             [userId]: currentCart.filter(item => item.id !== productId)
+          }
+        };
+      }),
+
+      // 3b. Xóa nhiều sản phẩm cùng lúc
+      removeItems: (productIds) => set((state) => {
+        const userId = state.activeUserId;
+        const currentCart = state.carts[userId] || [];
+        return {
+          carts: {
+            ...state.carts,
+            [userId]: currentCart.filter(item => !productIds.includes(item.id))
           }
         };
       }),

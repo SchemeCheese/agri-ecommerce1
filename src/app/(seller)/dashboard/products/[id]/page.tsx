@@ -1,32 +1,41 @@
-"use client";
+'use client';
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MOCK_PRODUCTS, Product } from '@/data';
+import { useSellerProducts, SellerProduct, ProductFormData } from '@/hooks/useSellerProducts';
 import { PageHeader } from '@/components/seller/common/PageHeader';
 import { ProductForm } from '@/components/seller/products/ProductForm';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  const [product, setProduct] = useState<Product | null>(null);
+  const { fetchProductById, updateProduct } = useSellerProducts();
+  const [product, setProduct] = useState<SellerProduct | null>(null);
+  const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
-    const fetch = async () => {
-       const resolvedParams = await params;
-       const found = MOCK_PRODUCTS.find(p => p.id === resolvedParams.id);
-       if (found) setProduct(found);
-    }
-    fetch();
-  }, [params]);
+    const load = async () => {
+      const resolvedParams = await params;
+      const found = await fetchProductById(resolvedParams.id);
+      if (found) setProduct(found);
+      else setFetchError('Không tìm thấy sản phẩm');
+    };
+    load();
+  }, [params]); // eslint-disable-line
 
-  const handleUpdate = (data: any) => {
-    console.log("Update Data:", data);
-    alert("Cập nhật thành công!");
+  const handleUpdate = async (data: ProductFormData, imageFiles: File[]) => {
+    if (!product) return;
+    await updateProduct(product.id, data, imageFiles);
     router.push('/dashboard/products');
   };
 
-  if (!product) return <div>Đang tải...</div>;
+  if (fetchError) return (
+    <div className="text-center py-32 text-red-500">
+      <p className="font-bold">{fetchError}</p>
+      <button onClick={() => router.back()} className="mt-4 text-sm text-green-600 font-bold hover:underline">← Quay lại</button>
+    </div>
+  );
+  if (!product) return <div className="flex justify-center items-center py-32"><Loader2 className="animate-spin text-green-500" size={36} /></div>;
 
   return (
     <div>

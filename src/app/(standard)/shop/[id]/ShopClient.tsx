@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
-import { ShopInfo, Product } from '@/data';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
 import { 
@@ -17,9 +16,16 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 
+const BACKEND_URL = 'http://localhost:3001';
+const fixImg = (url: string) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+};
+
 interface ShopClientProps {
-  shop: ShopInfo;
-  products: Product[];
+  shop: any;
+  products: any[];
 }
 
 export default function ShopClient({ shop, products }: ShopClientProps) {
@@ -28,24 +34,27 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
   
   // Top 6 Đánh giá cao nhất (Sắp xếp theo rating giảm dần)
   const topRatedProducts = useMemo(() => 
-    [...products].sort((a, b) => b.rating - a.rating).slice(0, 6)
+    [...products].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 6)
   , [products]);
 
   // Top 6 Bán chạy nhất (Sắp xếp theo sold giảm dần)
   const bestSellingProducts = useMemo(() => 
-    [...products].sort((a, b) => b.sold - a.sold).slice(0, 6)
+    [...products].sort((a, b) => (b.sold ?? 0) - (a.sold ?? 0)).slice(0, 6)
   , [products]);
 
   // Hàng mới (Trong vòng 30 ngày)
   const newArrivals = useMemo(() => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    return products.filter(p => new Date(p.createdAt) > oneMonthAgo);
+    return products.filter(p => {
+      const d = p.created_at || p.createdAt;
+      return d && new Date(d) > oneMonthAgo;
+    });
   }, [products]);
 
   // Danh mục sản phẩm CỦA RIÊNG SHOP (để hiển thị sidebar bên trái)
   const shopCategories = useMemo(() => {
-    const cats = new Set(products.map(p => p.category));
+    const cats = new Set(products.map(p => p.category).filter(Boolean));
     return Array.from(cats);
   }, [products]);
 
@@ -72,8 +81,11 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
             
             {/* Avatar & Actions */}
             <div className="flex flex-col items-center">
-              <div className="relative w-28 h-28 rounded-full border-4 border-white shadow-md overflow-hidden bg-white">
-                <Image src={shop.avatar} alt={shop.name} fill className="object-cover" />
+              <div className="relative w-28 h-28 rounded-full border-4 border-white shadow-md overflow-hidden bg-green-50">
+                {fixImg(shop.avatar)
+                  ? <Image src={fixImg(shop.avatar)} alt={shop.name} fill className="object-cover" />
+                  : <Store className="w-14 h-14 text-green-600 m-auto mt-6" />
+                }
               </div>
               <h1 className="mt-3 text-xl font-bold text-gray-900">{shop.name}</h1>
               <div className="flex gap-2 mt-3">
@@ -265,12 +277,13 @@ const ShopBanner = ({ images }: { images: string[] }) => (
 );
 
 // 4. Helper map data để dùng lại component ProductCard cũ
-const mapProductToCard = (p: Product) => ({
+const mapProductToCard = (p: any) => ({
   id: p.id,
-  imageUrl: p.images[0],
+  imageUrl: fixImg(p.images?.[0] ?? ''),
   title: p.name,
-  description: p.description,
+  description: p.description ?? '',
   price: formatCurrency(p.price),
   rawPrice: p.price,
-  slug: p.slug
+  slug: p.id,
+  unit: p.unit,
 });

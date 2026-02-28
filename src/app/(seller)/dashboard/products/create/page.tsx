@@ -1,17 +1,18 @@
-"use client";
+'use client';
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/seller/common/PageHeader';
 import { ProductForm } from '@/components/seller/products/ProductForm';
+import { useSellerProducts, ProductFormData } from '@/hooks/useSellerProducts';
 import { ArrowLeft } from 'lucide-react';
 
 export default function CreateProductPage() {
   const router = useRouter();
+  const { createProduct } = useSellerProducts();
 
-  const handleCreate = (data: any) => {
-    console.log("Create Data:", data);
-    alert("Tạo sản phẩm thành công!");
+  const handleCreate = async (data: ProductFormData, imageFiles: File[]) => {
+    await createProduct(data, imageFiles);
     router.push('/dashboard/products');
   };
 

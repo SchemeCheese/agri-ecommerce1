@@ -2,10 +2,17 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import axios from 'axios';
+import api from '@/lib/axios';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
 import { Slider } from "@/components/ui/slider";
+
+const BACKEND_URL = 'http://localhost:3001';
+const fixImageUrl = (url: string) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+};
 
 // Sửa lại danh mục khớp với tên trả về từ DB
 const CATEGORIES = [
@@ -25,7 +32,6 @@ const ORIGINS = [
 ];
 
 const MAX_PRICE = 2000000;
-const API_URL = 'http://localhost:3001/products';
 
 export default function ProductListingPage() {
   const [products, setProducts] = useState<any[]>([]); // Dữ liệu thật
@@ -43,7 +49,7 @@ export default function ProductListingPage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await axios.get(API_URL);
+        const response = await api.get('/products');
         setProducts(response.data);
       } catch (error) {
         console.error("Lỗi khi tải sản phẩm:", error);
@@ -200,8 +206,8 @@ export default function ProductListingPage() {
                   <ProductCard
                     key={product.id}
                     id={product.id}
-                    slug={product.slug}
-                    imageUrl={product.images[0]}
+                    slug={product.id}
+                    imageUrl={fixImageUrl(product.images?.[0] ?? '')}
                     title={product.name}
                     description={product.description}
                     price={formatCurrency(product.price)}

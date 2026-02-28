@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container';
 import { 
   MapPin, CreditCard, Loader2, ChevronRight, 
-  Wallet, Building, Truck, ShieldCheck, Package
+  Wallet, Building, Truck, ShieldCheck, Package,
+  X, User, Phone, CheckCircle2, Tag
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,9 +17,12 @@ import Link from 'next/link';
 export default function CheckoutPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { carts, activeUserId, clearCart } = useCartStore();
+  const { carts, activeUserId, clearCart, removeItems } = useCartStore();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountApplied, setDiscountApplied] = useState(false);
 
   const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -30,7 +34,25 @@ export default function CheckoutPage() {
     if (user) setFullName(user.full_name || '');
   }, [user]);
 
-  const items = carts[activeUserId] || [];
+  const searchParams = useSearchParams();
+  const isBuyNow = searchParams?.get('bn') === '1';
+  const buyNowItem = isBuyNow ? {
+    id: searchParams!.get('id') || '',
+    name: decodeURIComponent(searchParams!.get('name') || ''),
+    price: Number(searchParams!.get('price') || 0),
+    quantity: Number(searchParams!.get('qty') || 1),
+    images: [decodeURIComponent(searchParams!.get('img') || '')],
+    unit: decodeURIComponent(searchParams!.get('unit') || ''),
+    seller_id: decodeURIComponent(searchParams!.get('sellerId') || ''),
+  } : null;
+
+  const selectedIds = searchParams?.get('ids')?.split(',').filter(Boolean) ?? [];
+  const allCartItems = carts[activeUserId] || [];
+  const items = (isBuyNow && buyNowItem)
+    ? [buyNowItem]
+    : selectedIds.length > 0
+      ? allCartItems.filter(item => selectedIds.includes(item.id))
+      : allCartItems;
   const totalPrice = items.reduce((total, item) => total + item.price * item.quantity, 0);
 
   const handlePlaceOrder = async () => {
@@ -40,16 +62,23 @@ export default function CheckoutPage() {
     }
     setLoading(true);
     try {
+      const pmMap: Record<string, string> = { cod: 'COD', momo: 'MOMO', zalopay: 'ZALOPAY', bank: 'QR_CODE' };
       await api.post('/orders/checkout', {
         shipping_address: `${address} (SĐT: ${phoneNumber})`,
+        payment_method: pmMap[paymentMethod] || 'COD',
         items: items.map(item => ({
           product_id: item.id,
-          seller_id: item.seller_id,
           quantity: item.quantity,
           price: item.price
         }))
       });
-      clearCart();
+      if (!isBuyNow) {
+        if (selectedIds.length > 0) {
+          removeItems(selectedIds);
+        } else {
+          clearCart();
+        }
+      }
       router.push('/order-confirmation');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Lỗi đặt hàng. Hãy thử xóa giỏ và thêm lại sản phẩm.');
@@ -220,6 +249,35 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
+              {/* Mã giảm giá */}
+              <div className="px-6 py-4 border-t border-dashed border-gray-200">
+                <p className="text-sm font-bold text-gray-700 mb-2.5 flex items-center gap-2">
+                  <Tag size={14} className="text-orange-500"/> Mã giảm giá
+                </p>
+                {discountApplied ? (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+                    <span className="text-sm font-bold text-green-700">{discountCode}</span>
+                    <button onClick={() => { setDiscountApplied(false); setDiscountCode(''); }} className="text-gray-400 hover:text-red-500 ml-2"><X size={16}/></button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={discountCode}
+                      onChange={e => setDiscountCode(e.target.value.toUpperCase())}
+                      placeholder="Nhập mã giảm giá"
+                      className="flex-1 px-3 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/10 uppercase font-medium"
+                    />
+                    <button
+                      onClick={() => { if (discountCode) { alert('Tính năng mã giảm giá sắp ra mắt! 🚀'); } }}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-lg transition whitespace-nowrap"
+                    >
+                      Áp dụng
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Summary */}
               <div className="px-6 py-4 border-t border-dashed border-gray-200 bg-gray-50/50 space-y-3">
                 <div className="flex justify-between text-sm text-gray-500">
@@ -244,7 +302,13 @@ export default function CheckoutPage() {
               {/* CTA Button */}
               <div className="px-6 pb-6 pt-2">
                 <button
-                  onClick={handlePlaceOrder}
+                  onClick={() => {
+                    if (!address.trim() || !phoneNumber.trim()) {
+                      alert('Vui lòng nhập đầy đủ thông tin giao hàng');
+                      return;
+                    }
+                    setShowConfirmDialog(true);
+                  }}
                   disabled={loading || items.length === 0}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-green-600/20 hover:shadow-green-600/30 hover:scale-[1.01] flex items-center justify-center gap-2 text-sm uppercase tracking-wide"
                 >
@@ -264,6 +328,191 @@ export default function CheckoutPage() {
 
         </div>
       </Container>
+
+      {/* ===== DIALOG XÁC NHẬN ĐẶT HÀNG ===== */}
+      {showConfirmDialog && (
+        <CheckoutConfirmDialog
+          items={items}
+          fullName={fullName}
+          phoneNumber={phoneNumber}
+          address={address}
+          paymentMethod={paymentMethods.find(m => m.id === paymentMethod)!}
+          totalPrice={totalPrice}
+          loading={loading}
+          onClose={() => setShowConfirmDialog(false)}
+          onConfirm={handlePlaceOrder}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   CHECKOUT CONFIRM DIALOG
+   ============================================================ */
+function CheckoutConfirmDialog({
+  items, fullName, phoneNumber, address,
+  paymentMethod, totalPrice, loading,
+  onClose, onConfirm
+}: {
+  items: any[];
+  fullName: string;
+  phoneNumber: string;
+  address: string;
+  paymentMethod: { id: string; title: string; sub: string; icon: React.ReactNode };
+  totalPrice: number;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === overlayRef.current) onClose();
+  };
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-10 rounded-t-2xl">
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg">Xác nhận đơn hàng</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Vui lòng kiểm tra lại trước khi đặt</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-900"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+
+          {/* Thông tin người nhận */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Thông tin giao hàng</p>
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                <User size={13} className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Người nhận</p>
+                <p className="text-sm font-bold text-gray-800">{fullName || 'Chưa nhập'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Phone size={13} className="text-blue-600" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Số điện thoại</p>
+                <p className="text-sm font-bold text-gray-800">{phoneNumber}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <MapPin size={13} className="text-amber-600" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Địa chỉ nhận hàng</p>
+                <p className="text-sm font-medium text-gray-700 leading-relaxed">{address}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                <CreditCard size={13} className="text-purple-600" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Phương thức thanh toán</p>
+                <p className="text-sm font-bold text-gray-800">{paymentMethod?.title}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Danh sách sản phẩm */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+              Sản phẩm đặt mua ({items.length} món)
+            </p>
+            <div className="space-y-3">
+              {items.map((item) => (
+                <div key={item.id} className="flex gap-3 items-center p-3 rounded-xl border border-gray-100">
+                  <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 bg-gray-50">
+                    <Image
+                      src={item.images?.[0] ?? '/placeholder.png'}
+                      alt={item.name}
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute -top-1 -right-1 bg-gray-900 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                      {item.quantity}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{item.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{item.unit} · x{item.quantity}</p>
+                  </div>
+                  <p className="text-sm font-black text-green-600 flex-shrink-0">
+                    {(item.price * item.quantity).toLocaleString()}đ
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Tổng tiền */}
+          <div className="bg-gray-900 rounded-xl p-5 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-400 font-medium">Tổng thanh toán</p>
+                <p className="text-2xl font-black text-green-400 mt-0.5">
+                  {totalPrice.toLocaleString()}đ
+                </p>
+                <p className="text-[11px] text-gray-400 mt-1">Đã bao gồm phí vận chuyển miễn phí</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-400">{items.length} sản phẩm</p>
+                <p className="text-xs text-green-400 font-semibold mt-1">Freeship</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Nút hành động */}
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 py-3.5 rounded-xl border-2 border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-all disabled:opacity-50"
+            >
+              Kiểm tra lại
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              className="flex-1 py-3.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-600/20 disabled:opacity-70"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <><CheckCircle2 size={18} /> Xác nhận đặt hàng</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

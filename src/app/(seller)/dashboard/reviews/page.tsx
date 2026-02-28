@@ -1,44 +1,37 @@
-"use client";
+'use client';
 
-import React, { useState } from 'react';
-import { MOCK_PRODUCTS } from '@/data';
-import { Star, MessageCircle, BarChart3, Filter } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useSellerReviews } from '@/hooks/useSellerReviews';
+import { Star, MessageCircle, BarChart3, Filter, Loader2 } from 'lucide-react';
 import { ReviewCard } from '@/components/seller/reviews/ReviewCard';
-
-const CURRENT_SHOP_ID = 'shop-1';
 
 export default function ReviewsManagementPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'unreplied'>('all');
   const [filterStar, setFilterStar] = useState(0);
+  const { reviews, stats, loading, fetchReviews, replyReview } = useSellerReviews();
 
-  // 1. Gom dữ liệu
-  const shopReviews = MOCK_PRODUCTS
-    .filter(p => p.shop.id === CURRENT_SHOP_ID)
-    .flatMap(p => (p.reviews || []).map(r => ({ ...r, productName: p.name, productImage: p.images[0] })));
+  useEffect(() => { fetchReviews(); }, []); // eslint-disable-line
 
-  // 2. Logic Lọc
-  const filteredReviews = shopReviews.filter(r => {
+  const filteredReviews = reviews.filter(r => {
     const matchStar = filterStar === 0 || Math.round(r.rating) === filterStar;
-    // const matchReply = activeTab === 'all' || (activeTab === 'unreplied' && !r.isReplied); // Cần thêm field isReplied vào data thật
-    return matchStar;
+    const matchReply = activeTab === 'all' || (activeTab === 'unreplied' && !r.seller_reply);
+    return matchStar && matchReply;
   });
-
-  // Stats
-  const averageRating = shopReviews.length > 0 
-    ? (shopReviews.reduce((acc, r) => acc + r.rating, 0) / shopReviews.length).toFixed(1) 
-    : 0;
+  
+  const unrepliedCount = reviews.filter(r => !r.seller_reply).length;
+  const replyRate = stats.total > 0 ? Math.round((stats.repliedCount / stats.total) * 100) : 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       
-      {/* 1. SECTION THỐNG KÊ (Giữ nguyên vì bạn khen đẹp) */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
          <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-gray-100 flex items-center gap-5">
             <div className="w-14 h-14 rounded-2xl bg-yellow-50 flex items-center justify-center text-yellow-500 shadow-sm">
                <Star size={28} fill="currentColor" />
             </div>
             <div>
-               <h3 className="text-3xl font-extrabold text-gray-900">{averageRating}</h3>
+               <h3 className="text-3xl font-extrabold text-gray-900">{loading ? '--' : stats.average.toFixed(1)}</h3>
                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Điểm trung bình</p>
             </div>
          </div>
@@ -48,7 +41,7 @@ export default function ReviewsManagementPage() {
                <MessageCircle size={28} />
             </div>
             <div>
-               <h3 className="text-3xl font-extrabold text-gray-900">{shopReviews.length}</h3>
+               <h3 className="text-3xl font-extrabold text-gray-900">{loading ? '--' : stats.total}</h3>
                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Tổng đánh giá</p>
             </div>
          </div>
@@ -58,7 +51,7 @@ export default function ReviewsManagementPage() {
                <BarChart3 size={28} />
             </div>
             <div>
-               <h3 className="text-3xl font-extrabold text-gray-900">98%</h3>
+               <h3 className="text-3xl font-extrabold text-gray-900">{loading ? '--' : `${replyRate}%`}</h3>
                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Tỉ lệ phản hồi</p>
             </div>
          </div>
@@ -81,7 +74,7 @@ export default function ReviewsManagementPage() {
                 onClick={() => setActiveTab('unreplied')}
                 className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'unreplied' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                Chưa trả lời (2)
+                Chưa trả lời ({unrepliedCount})
               </button>
            </div>
 
@@ -104,14 +97,16 @@ export default function ReviewsManagementPage() {
            </div>
         </div>
 
-        {/* List Card */}
+        {/* List */}
         <div className="space-y-4">
-          {filteredReviews.length > 0 ? (
-            filteredReviews.map((review, idx) => (
-              <ReviewCard 
-                key={`${review.id}-${idx}`} 
-                review={review} 
-                onReply={(id) => alert(`Mở khung chat trả lời cho review ${id}`)} 
+          {loading ? (
+            <div className="flex justify-center py-24"><Loader2 className="animate-spin text-green-500" size={36} /></div>
+          ) : filteredReviews.length > 0 ? (
+            filteredReviews.map((review) => (
+              <ReviewCard
+                key={review.id}
+                review={review}
+                onReply={replyReview}
               />
             ))
           ) : (

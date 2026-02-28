@@ -1,30 +1,25 @@
-"use client";
+'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MOCK_PRODUCTS, Product } from '@/data';
-import { Search, Plus, SlidersHorizontal, ArrowUpDown, Package } from 'lucide-react';
+import { useSellerProducts } from '@/hooks/useSellerProducts';
+import { Search, Plus, SlidersHorizontal, ArrowUpDown, Package, Loader2 } from 'lucide-react';
 import { SellerProductCard } from '@/components/seller/products/SellerProductCard';
-
-const CURRENT_SHOP_ID = 'shop-1';
 
 export default function ProductManagementPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+  const { products, loading, error, fetchProducts, deleteProduct } = useSellerProducts();
 
-  // Data Filter
-  const [products, setProducts] = useState<Product[]>(
-    MOCK_PRODUCTS.filter(p => p.shop.id === CURRENT_SHOP_ID)
-  );
+  useEffect(() => { fetchProducts(); }, []); // eslint-disable-line
 
   const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleDelete = (id: string) => {
-    if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này không?')) {
-      setProducts(prev => prev.filter(p => p.id !== id));
-    }
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này không?')) return;
+    await deleteProduct(id);
   };
 
   return (
@@ -66,8 +61,18 @@ export default function ProductManagementPage() {
         </div>
       </div>
 
-      {/* 3. Product Grid (Dùng Component đã tách) */}
-      {filteredProducts.length > 0 ? (
+      {/* Product Grid */}
+      {loading ? (
+        <div className="flex justify-center items-center py-32">
+          <Loader2 className="animate-spin text-green-500" size={36} />
+        </div>
+      ) : error ? (
+        <div className="text-center py-32 text-red-500 bg-white rounded-3xl border border-dashed border-red-200">
+          <p className="font-bold">Không thể tải sản phẩm</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button onClick={fetchProducts} className="mt-4 text-sm text-green-600 font-bold hover:underline">Thử lại</button>
+        </div>
+      ) : filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map(product => (
             <SellerProductCard
