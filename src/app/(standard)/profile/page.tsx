@@ -17,7 +17,7 @@ import { OrderTimeline } from '@/components/ui/OrderTimeline';
 
 export default function ProfilePage() {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'reviews'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'reviews' | 'vouchers'>('info');
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -275,7 +275,7 @@ export default function ProfilePage() {
                 {menuItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id as any)}
+                    onClick={() => setActiveTab(item.id as 'info' | 'orders' | 'reviews' | 'vouchers')}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-sm transition-all ${
                       activeTab === item.id
                         ? 'bg-green-600 text-white shadow-sm'

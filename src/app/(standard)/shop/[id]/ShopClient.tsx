@@ -62,6 +62,31 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
   // State lọc cho phần "Tất cả sản phẩm"
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
+  // State và fetch Voucher
+  const [vouchers, setVouchers] = useState<any[]>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (shop.id) {
+      api.get(`/vouchers/shop/${shop.id}`)
+        .then(res => setVouchers(Array.isArray(res.data) ? res.data : []))
+        .catch(() => setVouchers([]));
+    }
+  }, [shop.id]);
+
+  const handleSaveVoucher = async (voucherId: string) => {
+    setSavingId(voucherId);
+    try {
+      await api.post(`/vouchers/save/${voucherId}`);
+      setSavedIds(prev => new Set([...prev, voucherId]));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Không thể lưu voucher.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const filteredAllProducts = activeCategory === 'all' 
     ? products 
     : products.filter(p => p.category === activeCategory);
@@ -112,27 +137,62 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
         </div>
       </div>
 
-      {/* --- PHẦN 2: VOUCHER SHOP --- */}
-      {shop.shopVouchers && shop.shopVouchers.length > 0 && (
+      {/* --- PHẦN 2: VOUCHER SHOP (real data) --- */}
+      {vouchers.length > 0 && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Ticket className="text-orange-500" /> Mã Giảm Giá Của Shop
           </h3>
-          <div className="flex flex-wrap gap-4">
-            {shop.shopVouchers.map((code, idx) => (
-              <div key={idx} className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-3 w-64 relative overflow-hidden group cursor-pointer hover:shadow-md transition">
-                <div className="border-r border-orange-200 pr-3 border-dashed">
-                   <span className="font-bold text-orange-600 text-lg">Voucher</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {vouchers.map((v: any) => {
+              const isSaved = savedIds.has(v.id);
+              const isSaving = savingId === v.id;
+              const expired = v.valid_to && new Date(v.valid_to) < new Date();
+              return (
+                <div key={v.id}
+                  className="relative flex items-stretch bg-orange-50 border border-orange-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition">
+                  {/* Left coupon strip */}
+                  <div className="bg-orange-500 text-white flex flex-col items-center justify-center px-4 py-3 min-w-[80px] text-center flex-shrink-0">
+                    <Tag size={20} className="mb-1" />
+                    <span className="text-lg font-black leading-none">
+                      {v.discount_type === 'PERCENT' ? `${v.discount_value}%` : `${Number(v.discount_value).toLocaleString()}đ`}
+                    </span>
+                    <span className="text-[10px] opacity-80">{v.discount_type === 'PERCENT' ? 'GIẢM' : 'GIẢM THẲNG'}</span>
+                  </div>
+                  {/* Notch */}
+                  <div className="absolute top-1/2 -translate-y-1/2 left-[68px] w-4 h-8 bg-white rounded-r-full border-r border-orange-200"/>
+                  {/* Right content */}
+                  <div className="flex-1 px-4 py-3 flex flex-col justify-between min-w-0">
+                    <div>
+                      <p className="font-black text-gray-800 tracking-widest text-sm">{v.code}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Đơn từ {Number(v.min_order_value).toLocaleString()}đ
+                        {v.max_discount_amount > 0 && ` · Tối đa ${Number(v.max_discount_amount).toLocaleString()}đ`}
+                      </p>
+                      {v.valid_to && (
+                        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                          <Clock size={10}/> HSD: {new Date(v.valid_to).toLocaleDateString('vi-VN')}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleSaveVoucher(v.id)}
+                      disabled={isSaved || isSaving || expired}
+                      className={`mt-2 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center justify-center gap-1 ${
+                        isSaved
+                          ? 'bg-green-100 text-green-700 border border-green-200'
+                          : expired
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-orange-500 hover:bg-orange-600 text-white'
+                      }`}>
+                      {isSaving ? <Loader2 size={12} className="animate-spin" /> :
+                        isSaved ? <><CheckCircle2 size={12}/> Đã lưu</> :
+                        expired ? 'Hết hạn' : 'Lưu ngay'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                   <p className="font-bold text-gray-800">{code}</p>
-                   <p className="text-xs text-orange-500">HSD: 30/12/2024</p>
-                </div>
-                {/* Decoration Circles */}
-                <div className="absolute -top-2 -left-2 w-4 h-4 bg-white rounded-full border border-orange-200"></div>
-                <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-white rounded-full border border-orange-200"></div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
