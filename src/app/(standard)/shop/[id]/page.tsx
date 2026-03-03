@@ -11,38 +11,34 @@ export default async function ShopDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
 
   try {
-    // Dùng endpoint mới: GET /products/sellers/:id
-    const res = await axios.get(`${BACKEND_URL}/products/sellers/${id}`);
+    // Dùng endpoint mới: GET /shops/:id
+    const res = await axios.get(`${BACKEND_URL}/shops/${id}`);
     const data = res.data;
 
-    // BE có thể trả về dạng { shop, products, averageRating, totalSold }
-    // hoặc dạng array nếu chỉ trả products trực tiếp
     let shopProducts: any[] = [];
     let shopInfo: any = {};
 
     if (Array.isArray(data)) {
-      // Trường hợp BE trả thẳng mảng products
       shopProducts = data;
       const first = shopProducts[0];
       shopInfo = first?.shop || {};
     } else {
-      // Trường hợp BE trả object có shop + products
       shopProducts = data.products || [];
-      shopInfo = data.shop || {};
+      shopInfo = data.shop || data || {};
     }
 
     if (shopProducts.length === 0 && !shopInfo.id) return notFound();
 
     const shop = {
       id,
-      name: shopInfo.name || shopInfo.store_name || data.full_name || 'Agri Shop',
-      avatar: shopInfo.avatar || shopInfo.avatar_url || '',
-      banner: shopInfo.banner || shopInfo.banner_url || '',
-      description: shopInfo.description || shopInfo.store_description || '',
-      location: shopInfo.location || shopInfo.address || shopInfo.store_address || '',
+      name: shopInfo.store_name || shopInfo.name || data.full_name || 'Agri Shop',
+      avatar: shopInfo.avatar_url || shopInfo.avatar || '',
+      banner: shopInfo.banner_url || shopInfo.banner || '',
+      description: shopInfo.store_description || shopInfo.description || '',
+      location: shopInfo.store_address || shopInfo.address || shopInfo.location || '',
       isVerified: shopInfo.isVerified ?? shopInfo.is_verified ?? false,
-      rating: data.averageRating ?? shopInfo.rating ?? 5,
-      totalSold: data.totalSold ?? 0,
+      rating: shopInfo.avg_rating ?? data.averageRating ?? 5,
+      totalSold: shopInfo.total_sales ?? data.totalSold ?? 0,
       responseRate: '100%',
       totalProducts: shopProducts.length,
       joinDate: shopInfo.joinDate || '',

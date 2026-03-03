@@ -9,7 +9,7 @@ import { Container } from '@/components/ui/Container';
 import { 
   MapPin, CreditCard, Loader2, ChevronRight, 
   Wallet, Building, Truck, ShieldCheck, Package,
-  X, User, Phone, CheckCircle2, Tag
+  X, User, Phone, CheckCircle2, Tag, AlertCircle, Ticket
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -23,6 +23,9 @@ export default function CheckoutPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [discountCode, setDiscountCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
 
   const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -54,6 +57,35 @@ export default function CheckoutPage() {
       ? allCartItems.filter(item => selectedIds.includes(item.id))
       : allCartItems;
   const totalPrice = items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const finalTotal = Math.max(0, totalPrice - discountAmount);
+
+  const handleApplyVoucher = async () => {
+    if (!discountCode.trim()) return;
+    setVoucherLoading(true);
+    setVoucherError('');
+    try {
+      // Get seller_id from first item (single seller checkout assumption)
+      const sellerId = items[0]?.seller_id || '';
+      const res = await api.post('/vouchers/validate', {
+        code: discountCode.trim().toUpperCase(),
+        seller_id: sellerId,
+        order_total: totalPrice,
+      });
+      setDiscountAmount(res.data.discount_amount || 0);
+      setDiscountApplied(true);
+    } catch (err: any) {
+      setVoucherError(err.response?.data?.message || 'Mã không hợp lệ hoặc đã hết hạn.');
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setDiscountApplied(false);
+    setDiscountCode('');
+    setDiscountAmount(0);
+    setVoucherError('');
+  };
 
   const handlePlaceOrder = async () => {
     if (!address || !phoneNumber) {
@@ -66,6 +98,7 @@ export default function CheckoutPage() {
       await api.post('/orders/checkout', {
         shipping_address: `${address} (SĐT: ${phoneNumber})`,
         payment_method: pmMap[paymentMethod] || 'COD',
+        ...(discountApplied && discountCode ? { voucher_code: discountCode.trim().toUpperCase() } : {}),
         items: items.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -252,28 +285,40 @@ export default function CheckoutPage() {
               {/* Mã giảm giá */}
               <div className="px-6 py-4 border-t border-dashed border-gray-200">
                 <p className="text-sm font-bold text-gray-700 mb-2.5 flex items-center gap-2">
-                  <Tag size={14} className="text-orange-500"/> Mã giảm giá
+                  <Ticket size={14} className="text-orange-500"/> Mã giảm giá
                 </p>
                 {discountApplied ? (
                   <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
-                    <span className="text-sm font-bold text-green-700">{discountCode}</span>
-                    <button onClick={() => { setDiscountApplied(false); setDiscountCode(''); }} className="text-gray-400 hover:text-red-500 ml-2"><X size={16}/></button>
+                    <div>
+                      <span className="text-sm font-bold text-green-700">{discountCode}</span>
+                      <p className="text-xs text-green-600 mt-0.5">Giảm {discountAmount.toLocaleString()}đ</p>
+                    </div>
+                    <button onClick={handleRemoveVoucher} className="text-gray-400 hover:text-red-500 ml-2"><X size={16}/></button>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={discountCode}
-                      onChange={e => setDiscountCode(e.target.value.toUpperCase())}
-                      placeholder="Nhập mã giảm giá"
-                      className="flex-1 px-3 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/10 uppercase font-medium"
-                    />
-                    <button
-                      onClick={() => { if (discountCode) { alert('Tính năng mã giảm giá sắp ra mắt! 🚀'); } }}
-                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-lg transition whitespace-nowrap"
-                    >
-                      Áp dụng
-                    </button>
+                  <div className="space-y-1.5">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={discountCode}
+                        onChange={e => { setDiscountCode(e.target.value.toUpperCase()); setVoucherError(''); }}
+                        placeholder="Nhập mã giảm giá"
+                        className="flex-1 px-3 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/10 uppercase font-medium"
+                      />
+                      <button
+                        onClick={handleApplyVoucher}
+                        disabled={voucherLoading || !discountCode.trim()}
+                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-bold rounded-lg transition whitespace-nowrap flex items-center gap-1"
+                      >
+                        {voucherLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                        Áp dụng
+                      </button>
+                    </div>
+                    {voucherError && (
+                      <div className="flex items-center gap-1.5 text-xs text-red-500">
+                        <AlertCircle size={12}/> {voucherError}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -284,6 +329,12 @@ export default function CheckoutPage() {
                   <span>Tạm tính</span>
                   <span className="font-medium text-gray-700">{totalPrice.toLocaleString()}đ</span>
                 </div>
+                {discountApplied && discountAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-orange-500 font-semibold">Giảm giá ({discountCode})</span>
+                    <span className="font-bold text-orange-500">-{discountAmount.toLocaleString()}đ</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>Phí vận chuyển</span>
                   <span className="font-semibold text-green-600 text-xs bg-green-50 px-2 py-0.5 rounded">Miễn phí</span>
@@ -292,7 +343,7 @@ export default function CheckoutPage() {
                   <span className="font-bold text-gray-900 text-sm">Tổng cộng</span>
                   <div className="text-right">
                     <p className="text-2xl font-black text-green-600 leading-none">
-                      {totalPrice.toLocaleString()}đ
+                      {finalTotal.toLocaleString()}đ
                     </p>
                     <p className="text-[10px] text-gray-400 mt-0.5">Đã bao gồm thuế phí</p>
                   </div>
@@ -338,6 +389,9 @@ export default function CheckoutPage() {
           address={address}
           paymentMethod={paymentMethods.find(m => m.id === paymentMethod)!}
           totalPrice={totalPrice}
+          discountAmount={discountAmount}
+          finalTotal={finalTotal}
+          discountCode={discountApplied ? discountCode : ''}
           loading={loading}
           onClose={() => setShowConfirmDialog(false)}
           onConfirm={handlePlaceOrder}
@@ -352,7 +406,7 @@ export default function CheckoutPage() {
    ============================================================ */
 function CheckoutConfirmDialog({
   items, fullName, phoneNumber, address,
-  paymentMethod, totalPrice, loading,
+  paymentMethod, totalPrice, discountAmount, finalTotal, discountCode, loading,
   onClose, onConfirm
 }: {
   items: any[];
@@ -361,6 +415,9 @@ function CheckoutConfirmDialog({
   address: string;
   paymentMethod: { id: string; title: string; sub: string; icon: React.ReactNode };
   totalPrice: number;
+  discountAmount: number;
+  finalTotal: number;
+  discountCode: string;
   loading: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -478,9 +535,15 @@ function CheckoutConfirmDialog({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-400 font-medium">Tổng thanh toán</p>
+                {discountAmount > 0 && (
+                  <p className="text-sm text-gray-400 line-through mt-0.5">{totalPrice.toLocaleString()}đ</p>
+                )}
                 <p className="text-2xl font-black text-green-400 mt-0.5">
-                  {totalPrice.toLocaleString()}đ
+                  {finalTotal.toLocaleString()}đ
                 </p>
+                {discountCode && (
+                  <p className="text-xs text-orange-400 mt-1">Mã giảm: {discountCode} — -{discountAmount.toLocaleString()}đ</p>
+                )}
                 <p className="text-[11px] text-gray-400 mt-1">Đã bao gồm phí vận chuyển miễn phí</p>
               </div>
               <div className="text-right">

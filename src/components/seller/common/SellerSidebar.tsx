@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, Package, PackagePlus, MessageSquare, 
-  LogOut, Star, Store, ShoppingBag 
+  LogOut, Star, Store, ShoppingBag, Ticket
 } from 'lucide-react';
 
 const MENU_ITEMS = [
@@ -16,6 +16,7 @@ const MENU_ITEMS = [
   { icon: <ShoppingBag size={20} />, label: 'Đơn hàng', href: '/dashboard/orders' },
   { icon: <Package size={20} />, label: 'Sản phẩm', href: '/dashboard/products' },
   { icon: <PackagePlus size={20} />, label: 'Thêm mới', href: '/dashboard/products/create' },
+  { icon: <Ticket size={20} />, label: 'Mã giảm giá', href: '/dashboard/vouchers' },
   { icon: <Star size={20} />, label: 'Đánh giá', href: '/dashboard/reviews' },
   { icon: <Store size={20} />, label: 'Hồ sơ Shop', href: '/dashboard/shop' },
   { icon: <MessageSquare size={20} />, label: 'Chat', href: '/seller-chat' },

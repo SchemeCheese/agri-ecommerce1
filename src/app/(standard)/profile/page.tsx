@@ -10,7 +10,7 @@ import {
   CheckCircle2, XCircle, ChevronRight, LogOut,
   Loader2, Mail, Phone, Shield, Store, X,
   CreditCard, Truck, Star, MessageSquare, AlertCircle,
-  PackageCheck, AlertTriangle, Camera, Edit, Check
+  PackageCheck, AlertTriangle, Camera, Edit, Check, Ticket, Tag
 } from 'lucide-react';
 import Link from 'next/link';
 import { OrderTimeline } from '@/components/ui/OrderTimeline';
@@ -33,6 +33,8 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [profileSaveError, setProfileSaveError] = useState('');
   const [showWriteReview, setShowWriteReview] = useState<any>(null);
+  const [savedVouchers, setSavedVouchers] = useState<any[]>([]);
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
 
   // Track scroll để header đổi màu
   useEffect(() => {
@@ -64,6 +66,17 @@ export default function ProfilePage() {
         } finally { setLoadingReviews(false); }
       };
       fetchReviews();
+    }
+  }, [activeTab]);
+
+  // Load vouchers tab
+  useEffect(() => {
+    if (activeTab === 'vouchers') {
+      setLoadingVouchers(true);
+      api.get('/vouchers/saved')
+        .then(res => setSavedVouchers(Array.isArray(res.data) ? res.data : []))
+        .catch(err => console.error('Vouchers error:', err))
+        .finally(() => setLoadingVouchers(false));
     }
   }, [activeTab]);
 
@@ -177,9 +190,10 @@ export default function ProfilePage() {
   };
 
   const menuItems = [
-    { id: 'info',    label: 'Thông tin cá nhân',  icon: <User size={18} />    },
-    { id: 'orders',  label: 'Lịch sử mua hàng',   icon: <Package size={18} /> },
-    { id: 'reviews', label: 'Đánh giá của tôi',    icon: <Star size={18} />    },
+    { id: 'info',     label: 'Thông tin cá nhân',  icon: <User size={18} />    },
+    { id: 'orders',   label: 'Lịch sử mua hàng',   icon: <Package size={18} /> },
+    { id: 'vouchers', label: 'Ví Voucher',          icon: <Ticket size={18} />  },
+    { id: 'reviews',  label: 'Đánh giá của tôi',    icon: <Star size={18} />    },
   ];
 
   const getOrderStatus = (status: string) => {
@@ -379,6 +393,81 @@ export default function ProfilePage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* TAB VÍ VOUCHER */}
+            {activeTab === 'vouchers' && (
+              <div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-5 mb-5 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Ví Voucher</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Mã giảm giá bạn đã lưu</p>
+                  </div>
+                  <Ticket size={22} className="text-gray-300" />
+                </div>
+
+                {loadingVouchers ? (
+                  <div className="bg-white rounded-xl border border-gray-100 flex flex-col items-center py-20">
+                    <Loader2 className="animate-spin text-green-600 mb-3" size={32} />
+                  </div>
+                ) : savedVouchers.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-100 text-center py-20 px-6">
+                    <Ticket size={48} className="mx-auto text-gray-200 mb-4" />
+                    <p className="text-gray-500 font-semibold">Chưa có voucher nào</p>
+                    <p className="text-gray-400 text-sm mt-1">Ghé thăm các shop để lưu mã giảm giá nhé!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {savedVouchers.map((sv: any) => {
+                      const v = sv.voucher || sv;
+                      const expired = v.valid_to && new Date(v.valid_to) < new Date();
+                      const used = sv.is_used;
+                      return (
+                        <div key={sv.id || v.id}
+                          className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
+                            expired || used ? 'opacity-60' : 'border-green-200'
+                          }`}
+                        >
+                          <div className={`px-4 py-3 flex items-center justify-between ${
+                            expired || used ? 'bg-gray-400' : 'bg-green-600'
+                          }`}>
+                            <div className="flex items-center gap-2 text-white">
+                              <Tag size={14} />
+                              <span className="font-black tracking-widest">{v.code}</span>
+                            </div>
+                            <span className="text-xs text-white/80 font-semibold">
+                              {used ? 'Đã dùng' : expired ? 'Hết hạn' : '✓ Có thể dùng'}
+                            </span>
+                          </div>
+                          <div className="p-4">
+                            <p className="text-xl font-black text-green-600">
+                              {v.discount_type === 'PERCENT'
+                                ? `Giảm ${v.discount_value}%`
+                                : `Giảm ${Number(v.discount_value).toLocaleString()}đ`
+                              }
+                            </p>
+                            {v.discount_type === 'PERCENT' && v.max_discount_amount > 0 && (
+                              <p className="text-xs text-gray-400">Tối đa {Number(v.max_discount_amount).toLocaleString()}đ</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              Đơn từ {Number(v.min_order_value).toLocaleString()}đ
+                            </p>
+                            {v.valid_to && (
+                              <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                                <Clock size={10}/>
+                                HSD: {new Date(v.valid_to).toLocaleDateString('vi-VN')}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Shop: <span className="font-semibold text-gray-600">{v.seller?.profile?.store_name || v.shop_name || '—'}</span>
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
 import { 
   UserPlus, MessageCircle, Star, MapPin, 
-  Store, Clock, Ticket, Filter, LayoutGrid 
+  Store, Clock, Ticket, Filter, LayoutGrid, Tag, CheckCircle2, Loader2
 } from 'lucide-react';
 import {
   Carousel,
@@ -15,6 +15,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import api from '@/lib/axios';
 
 const BACKEND_URL = 'http://localhost:3001';
 const fixImg = (url: string) => {

@@ -18,26 +18,18 @@ export const TopShops = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/products')
+    api.get('/shops/top', { params: { limit: 4, sort: 'sales' } })
       .then(res => {
-        const products: any[] = res.data;
-        // Trích xuất shop duy nhất không trùng seller_id
-        const shopMap = new Map<string, any>();
-        for (const p of products) {
-          const sellerId = p.seller_id || p.seller?.id;
-          if (sellerId && !shopMap.has(sellerId)) {
-            const sellerProfile = p.seller?.profile;
-            shopMap.set(sellerId, {
-              id: sellerId,
-              name: sellerProfile?.store_name || p.seller?.full_name || 'Agri Shop',
-              avatar: fixImg(sellerProfile?.avatar_url || p.seller?.avatar || ''),
-              rating: sellerProfile?.rating || (4.5 + Math.random() * 0.5).toFixed(1),
-              highlight: sellerProfile?.store_address || 'Nông sản sạch',
-            });
-          }
-          if (shopMap.size >= 8) break;
-        }
-        setShops(Array.from(shopMap.values()).slice(0, 4));
+        const data: any[] = Array.isArray(res.data) ? res.data : [];
+        setShops(data.map(s => ({
+          id: s.id,
+          name: s.store_name || 'Agri Shop',
+          avatar: fixImg(s.avatar_url || ''),
+          rating: s.avg_rating ?? 5,
+          highlight: s.store_address || 'Nông sản sạch',
+          totalSales: s.total_sales ?? 0,
+          totalReviews: s.total_reviews ?? 0,
+        })));
       })
       .catch(err => console.error('TopShops error:', err))
       .finally(() => setLoading(false));
@@ -79,6 +71,7 @@ export const TopShops = () => {
                 </div>
               </div>
               <h3 className="font-bold text-gray-800 text-base mb-1 group-hover:text-green-700 transition-colors line-clamp-1">{shop.name}</h3>
+              <p className="text-xs text-gray-400 mb-1">{shop.totalReviews} đánh giá · {shop.totalSales} đã bán</p>
               <p className="text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full font-medium line-clamp-1">
                 {shop.highlight}
               </p>
