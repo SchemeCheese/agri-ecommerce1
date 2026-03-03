@@ -34,7 +34,10 @@ export function useSellerShop() {
         store_description: d.profile?.description       || '',
         store_address:     d.profile?.address           || '',
         store_phone:       d.phone_number               || '',
-        avatar_url:        d.avatar ? `http://localhost:3001${d.avatar}` : '',
+        // Guard: if BE already returns a full URL, don't double-prefix
+        avatar_url:        d.avatar
+          ? (d.avatar.startsWith('http') ? d.avatar : `http://localhost:3001${d.avatar}`)
+          : '',
         banner_url:        d.profile?.banner_url        || '',
         rating:            d.profile?.rating            || 0,
       });

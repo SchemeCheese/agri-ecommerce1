@@ -77,9 +77,9 @@ export const ReviewCard = ({ review, onReply }: ReviewProps) => {
            </div>
 
            {/* Images Grid (Khách upload) */}
-           {review.images && review.images.length > 0 && (
+           {review.review_images && review.review_images.length > 0 && (
              <div className="flex gap-2 mt-1">
-                {review.images.map((img: string, idx: number) => (
+                {review.review_images.map((img: string, idx: number) => (
                    <div key={idx} className="w-16 h-16 relative rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-90">
                       <Image src={img} alt="review-img" fill className="object-cover"/>
                    </div>
