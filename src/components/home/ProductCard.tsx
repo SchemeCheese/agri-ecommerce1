@@ -48,11 +48,9 @@ export const ProductCard = ({
       price: rawPrice,
       images: [imageUrl],
       slug: slug,
-      description: description,
-      category: category,
-      origin: 'khac',
-      seasons: [],
       seller_id: sellerId,
+      unit: unit || 'kg',
+      shop: sellerId ? { id: sellerId, store_name: '', avatar_url: null } : undefined,
     }, 1);
     alert(`Đã thêm ${title} vào giỏ!`);
   };

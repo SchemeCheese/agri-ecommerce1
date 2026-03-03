@@ -6,7 +6,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { formatCurrency } from '@/utils/vi';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { ShoppingCart, Trash2, Minus, Plus, ArrowRight, Check } from 'lucide-react';
+import { ShoppingCart, Trash2, Minus, Plus, ArrowRight, Check, Store } from 'lucide-react';
 import Image from 'next/image';
 
 export default function CartPage() {
@@ -64,6 +64,14 @@ export default function CartPage() {
     .filter((item) => selectedItems.includes(item.id))
     .reduce((total, item) => total + item.quantity, 0);
 
+  // Group items by shop
+  const shopGroups = items.reduce((acc, item) => {
+    const shopId = (item as any).shop?.id || item.seller_id || 'unknown';
+    if (!acc[shopId]) acc[shopId] = [];
+    acc[shopId].push(item);
+    return acc;
+  }, {} as Record<string, typeof items>);
+
   if (!mounted) return <div className="min-h-screen flex items-center justify-center text-gray-500">Đang tải giỏ hàng...</div>;
 
   if (items.length === 0) {
@@ -113,66 +121,95 @@ export default function CartPage() {
             </button>
           </div>
 
-          {/* List Item */}
-          {items.map((item) => (
-            <div key={item.id} className="flex flex-col sm:flex-row items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4 transition-all hover:shadow-md">
-              
-              {/* Checkbox & Image */}
-              <div className="flex items-center gap-4 w-full sm:w-auto">
-                <input
-                  type="checkbox"
-                  checked={selectedItems.includes(item.id)}
-                  onChange={() => toggleSelectItem(item.id)}
-                  className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 accent-green-600 cursor-pointer flex-shrink-0"
-                />
-                <div className="relative w-24 h-24 flex-shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                  <Image
-                    src={Array.isArray(item.images) ? item.images[0] : item.images || '/images/placeholder.jpg'}
-                    alt={item.name}
-                    fill
-                    className="object-cover"
+          {/* List Item — grouped by shop */}
+          {Object.entries(shopGroups).map(([shopId, shopItems]) => {
+            const shopData = (shopItems[0] as any).shop;
+            const shopName = shopData?.store_name || shopData?.name || 'Shop';
+            const shopAvatar = shopData?.avatar_url || shopData?.avatar || null;
+            const allSelected = shopItems.every(i => selectedItems.includes(i.id));
+            return (
+              <div key={shopId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* Shop header */}
+                <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <input
+                    type="checkbox"
+                    checked={allSelected && shopItems.length > 0}
+                    onChange={() => {
+                      if (allSelected) {
+                        setSelectedItems(prev => prev.filter(id => !shopItems.find(i => i.id === id)));
+                      } else {
+                        setSelectedItems(prev => [...new Set([...prev, ...shopItems.map(i => i.id)])]);
+                      }
+                    }}
+                    className="w-4 h-4 accent-green-600 cursor-pointer"
                   />
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 w-full text-center sm:text-left">
-                <h3 className="text-lg font-bold text-gray-800 line-clamp-1">{item.name}</h3>
-                <p className="text-sm text-gray-500 mb-1">Đơn vị: kg</p>
-                <p className="text-green-600 font-bold text-lg">{formatCurrency(item.price)}</p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-between w-full sm:w-auto gap-6">
-                <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-200 text-gray-600 transition"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="w-10 text-center font-bold text-gray-800 text-sm">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-200 text-gray-600 transition"
-                  >
-                    <Plus size={14} />
-                  </button>
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 bg-gray-200 flex-shrink-0">
+                    {shopAvatar ? (
+                      <Image src={shopAvatar} alt={shopName} fill className="object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <Store size={14} />
+                      </div>
+                    )}
+                  </div>
+                  <span className="font-bold text-gray-800 text-sm">{shopName}</span>
                 </div>
 
-                <button
-                  onClick={() => {
-                    removeFromCart(item.id);
-                    setSelectedItems(prev => prev.filter(id => id !== item.id));
-                  }}
-                  className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
-                  title="Xóa sản phẩm"
-                >
-                  <Trash2 size={20} />
-                </button>
+                {/* Shop items */}
+                {shopItems.map((item) => (
+                  <div key={item.id} className="flex flex-col sm:flex-row items-center p-4 gap-4 border-b border-gray-50 last:border-0 transition-all hover:bg-gray-50/50">
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.includes(item.id)}
+                        onChange={() => toggleSelectItem(item.id)}
+                        className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 accent-green-600 cursor-pointer flex-shrink-0"
+                      />
+                      <div className="relative w-20 h-20 flex-shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                        <Image
+                          src={Array.isArray(item.images) ? item.images[0] : item.images || '/images/placeholder.jpg'}
+                          alt={item.name}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 w-full text-center sm:text-left">
+                      <h3 className="text-base font-bold text-gray-800 line-clamp-1">{item.name}</h3>
+                      <p className="text-sm text-gray-500 mb-1">Đơn vị: {item.unit || 'kg'}</p>
+                      <p className="text-green-600 font-bold">{formatCurrency(item.price)}</p>
+                    </div>
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-6">
+                      <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-200 text-gray-600 transition"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="w-10 text-center font-bold text-gray-800 text-sm">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-200 text-gray-600 transition"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          removeFromCart(item.id);
+                          setSelectedItems(prev => prev.filter(id => id !== item.id));
+                        }}
+                        className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* --- CỘT PHẢI: TỔNG QUAN --- */}

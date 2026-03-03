@@ -9,8 +9,13 @@ export interface CartItem {
   slug?: string;
   quantity: number;
   stock?: number;
-  seller_id: string; 
+  seller_id: string;
   unit: string;
+  shop?: {
+    id: string;
+    store_name: string;
+    avatar_url: string | null;
+  };
 }
 
 interface CartState {

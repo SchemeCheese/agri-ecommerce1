@@ -105,8 +105,14 @@ export default function ProductClient({ product, allProducts }: { product: any, 
         images: product.images?.map(fixImg) ?? [],
         slug: product.id,
         seller_id: product.seller_id,
+        unit: product.unit || 'kg',
+        shop: product.shop ? {
+          id: product.shop.id,
+          store_name: product.shop.store_name || product.shop.name || '',
+          avatar_url: product.shop.avatar_url || product.shop.avatar || null,
+        } : (product.seller_id ? { id: product.seller_id, store_name: '', avatar_url: null } : undefined),
       },
-      quantity // Tham số thứ 2 là số lượng
+      quantity
     );
 
     alert(`Đã thêm ${quantity} ${product.unit} ${product.name} vào giỏ hàng!`);

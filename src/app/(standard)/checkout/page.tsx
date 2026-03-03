@@ -9,7 +9,7 @@ import { Container } from '@/components/ui/Container';
 import { 
   MapPin, CreditCard, Loader2, ChevronRight, 
   Wallet, Building, Truck, ShieldCheck, Package,
-  X, User, Phone, CheckCircle2, Tag, AlertCircle, Ticket, ChevronDown
+  X, User, Phone, CheckCircle2, Tag, AlertCircle, Ticket, Store
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -21,15 +21,12 @@ export default function CheckoutPage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [discountCode, setDiscountCode] = useState('');
-  const [discountApplied, setDiscountApplied] = useState(false);
-  const [discountAmount, setDiscountAmount] = useState(0);
-  const [voucherLoading, setVoucherLoading] = useState(false);
-  const [voucherError, setVoucherError] = useState('');
-  // Ví voucher đã lưu
-  const [savedVouchers, setSavedVouchers] = useState<any[]>([]);
-  const [showVoucherWallet, setShowVoucherWallet] = useState(false);
-  const [loadingWallet, setLoadingWallet] = useState(false);
+
+  // Voucher: per-shop state
+  type ShopVoucher = { inputCode: string; code: string; discount_amount: number; isValidating: boolean; error: string };
+  const [voucherByShop, setVoucherByShop] = useState<Record<string, ShopVoucher>>({});
+  const getShopVoucher = (shopId: string): ShopVoucher =>
+    voucherByShop[shopId] ?? { inputCode: '', code: '', discount_amount: 0, isValidating: false, error: '' };
 
   const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -61,77 +58,54 @@ export default function CheckoutPage() {
       ? allCartItems.filter(item => selectedIds.includes(item.id))
       : allCartItems;
   const totalPrice = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const finalTotal = Math.max(0, totalPrice - discountAmount);
 
-  const handleApplyVoucher = async () => {
-    if (!discountCode.trim()) return;
-    setVoucherLoading(true);
-    setVoucherError('');
+  // Group items by shop (supports both new shop obj and legacy seller_id)
+  const shopGroups: Record<string, typeof items> = items.reduce((acc, item) => {
+    const shopId = (item as any).shop?.id || item.seller_id || 'unknown';
+    if (!acc[shopId]) acc[shopId] = [];
+    acc[shopId].push(item);
+    return acc;
+  }, {} as Record<string, typeof items>);
+
+  const totalDiscount = Object.values(voucherByShop).reduce((s, v) => s + (v.discount_amount ?? 0), 0);
+  const finalTotal = Math.max(0, totalPrice - totalDiscount);
+
+  const handleApplyShopVoucher = async (shopId: string, code: string, subtotal: number) => {
+    if (!code.trim()) return;
+    setVoucherByShop(prev => ({
+      ...prev,
+      [shopId]: { ...getShopVoucher(shopId), isValidating: true, error: '' }
+    }));
     try {
-      // Get seller_id from first item (single seller checkout assumption)
-      const sellerId = items[0]?.seller_id || '';
-      if (!sellerId) {
-        setVoucherError('Không xác định được shop. Vui lòng thêm sản phẩm lại vào giỏ.');
-        return;
-      }
       const res = await api.post('/vouchers/validate', {
-        code: discountCode.trim().toUpperCase(),
-        seller_id: sellerId,
-        order_total: totalPrice,
+        code: code.trim().toUpperCase(),
+        seller_id: shopId,
+        order_total: subtotal,
       });
-      setDiscountAmount(res.data.discount_amount || 0);
-      setDiscountApplied(true);
+      setVoucherByShop(prev => ({
+        ...prev,
+        [shopId]: { inputCode: code, code: code.trim().toUpperCase(), discount_amount: res.data.discount_amount || 0, isValidating: false, error: '' }
+      }));
     } catch (err: any) {
-      setVoucherError(err.response?.data?.message || 'Mã không hợp lệ hoặc đã hết hạn.');
-    } finally {
-      setVoucherLoading(false);
+      setVoucherByShop(prev => ({
+        ...prev,
+        [shopId]: { ...prev[shopId], isValidating: false, error: err.response?.data?.message || 'Mã không hợp lệ hoặc đã hết hạn.' }
+      }));
     }
   };
 
-  const handleRemoveVoucher = () => {
-    setDiscountApplied(false);
-    setDiscountCode('');
-    setDiscountAmount(0);
-    setVoucherError('');
+  const handleRemoveShopVoucher = (shopId: string) => {
+    setVoucherByShop(prev => ({
+      ...prev,
+      [shopId]: { inputCode: '', code: '', discount_amount: 0, isValidating: false, error: '' }
+    }));
   };
 
-  // Fetch ví voucher đã lưu
-  const handleOpenWallet = async () => {
-    setShowVoucherWallet(true);
-    if (savedVouchers.length > 0) return;
-    setLoadingWallet(true);
-    try {
-      const res = await api.get('/vouchers/saved');
-      setSavedVouchers(Array.isArray(res.data) ? res.data : []);
-    } catch { setSavedVouchers([]); }
-    finally { setLoadingWallet(false); }
-  };
-
-  // Chọn voucher từ ví và auto-validate
-  const handlePickVoucher = async (code: string) => {
-    setShowVoucherWallet(false);
-    setDiscountCode(code);
-    setVoucherError('');
-    setVoucherLoading(true);
-    try {
-      const sellerId = items[0]?.seller_id || '';
-      if (!sellerId) {
-        setVoucherError('Không xác định được shop. Vui lòng thêm sản phẩm lại vào giỏ.');
-        setVoucherLoading(false);
-        return;
-      }
-      const res = await api.post('/vouchers/validate', {
-        code: code.toUpperCase(),
-        seller_id: sellerId,
-        order_total: totalPrice,
-      });
-      setDiscountAmount(res.data.discount_amount || 0);
-      setDiscountApplied(true);
-    } catch (err: any) {
-      setVoucherError(err.response?.data?.message || 'Mã không áp dụng được cho đơn này.');
-    } finally {
-      setVoucherLoading(false);
-    }
+  const setVoucherInput = (shopId: string, value: string) => {
+    setVoucherByShop(prev => ({
+      ...prev,
+      [shopId]: { ...getShopVoucher(shopId), inputCode: value, error: '' }
+    }));
   };
 
   const handlePlaceOrder = async () => {
@@ -142,15 +116,19 @@ export default function CheckoutPage() {
     setLoading(true);
     try {
       const pmMap: Record<string, string> = { cod: 'COD', momo: 'MOMO', zalopay: 'ZALOPAY', bank: 'QR_CODE' };
+      const seller_orders = Object.entries(shopGroups).map(([shopId, shopItems]) => ({
+        seller_id: shopId,
+        items: shopItems.map(i => ({
+          product_id: i.id,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+        voucher_code: voucherByShop[shopId]?.code || undefined,
+      }));
       await api.post('/orders/checkout', {
         shipping_address: `${address} (SĐT: ${phoneNumber})`,
         payment_method: pmMap[paymentMethod] || 'COD',
-        ...(discountApplied && discountCode ? { voucher_code: discountCode.trim().toUpperCase() } : {}),
-        items: items.map(item => ({
-          product_id: item.id,
-          quantity: item.quantity,
-          price: item.price
-        }))
+        seller_orders,
       });
       if (!isBuyNow) {
         if (selectedIds.length > 0) {
@@ -288,172 +266,154 @@ export default function CheckoutPage() {
                 ))}
               </div>
             </div>
+
+            {/* 3. Danh sách đặt hàng theo shop */}
+            {Object.entries(shopGroups).map(([shopId, shopItems]) => {
+              const shopData = (shopItems[0] as any).shop;
+              const shopName = shopData?.store_name || shopData?.name || 'Shop';
+              const shopAvatar = shopData?.avatar_url || shopData?.avatar || null;
+              const subtotal = shopItems.reduce((s, i) => s + i.price * i.quantity, 0);
+              const sv = getShopVoucher(shopId);
+              return (
+                <div key={shopId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  {/* Shop header */}
+                  <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
+                    <div className="relative w-9 h-9 rounded-full overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0">
+                      {shopAvatar
+                        ? <Image src={shopAvatar} alt={shopName} fill className="object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center text-gray-400"><Store size={15} /></div>}
+                    </div>
+                    <span className="font-bold text-gray-800">{shopName}</span>
+                    <span className="ml-auto text-xs text-gray-400">{shopItems.length} sản phẩm</span>
+                  </div>
+
+                  {/* Items */}
+                  <div className="px-5 py-4 space-y-3">
+                    {shopItems.map(item => (
+                      <div key={item.id} className="flex gap-3 items-center">
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 bg-gray-50">
+                          <Image src={item.images?.[0] ?? '/placeholder.png'} alt={item.name} fill className="object-cover" />
+                          <div className="absolute -top-1 -right-1 bg-gray-900 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.quantity}</div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 line-clamp-1">{item.name}</p>
+                          <p className="text-xs text-gray-400">{item.unit}</p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900">{(item.price * item.quantity).toLocaleString()}đ</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Per-shop voucher */}
+                  <div className="px-5 py-4 border-t border-dashed border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
+                        <Ticket size={13} className="text-orange-500" /> Mã giảm giá shop
+                      </span>
+                      {sv.code && (
+                        <button onClick={() => handleRemoveShopVoucher(shopId)} className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1">
+                          <X size={11} /> Xóa
+                        </button>
+                      )}
+                    </div>
+                    {sv.code ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        <div>
+                          <span className="text-sm font-bold text-green-700">{sv.code}</span>
+                          <p className="text-xs text-green-600">Giảm {sv.discount_amount.toLocaleString()}đ</p>
+                        </div>
+                        <CheckCircle2 size={15} className="text-green-500" />
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={sv.inputCode}
+                            onChange={e => setVoucherInput(shopId, e.target.value.toUpperCase())}
+                            placeholder="Nhập mã giảm giá"
+                            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-green-500 uppercase font-medium"
+                          />
+                          <button
+                            onClick={() => handleApplyShopVoucher(shopId, sv.inputCode, subtotal)}
+                            disabled={sv.isValidating || !sv.inputCode.trim()}
+                            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-bold rounded-lg transition flex items-center gap-1"
+                          >
+                            {sv.isValidating && <Loader2 size={13} className="animate-spin" />}
+                            Áp dụng
+                          </button>
+                        </div>
+                        {sv.error && (
+                          <p className="flex items-center gap-1 text-xs text-red-500"><AlertCircle size={12} /> {sv.error}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Shop subtotal */}
+                  <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                    <span className="text-sm text-gray-500">Tổng shop:</span>
+                    <div className="text-right">
+                      {sv.discount_amount > 0 && <p className="text-xs text-gray-400 line-through">{subtotal.toLocaleString()}đ</p>}
+                      <p className="font-bold text-gray-900">{(subtotal - sv.discount_amount).toLocaleString()}đ</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* ===== CỘT PHẢI (4 CỘT) ===== */}
           <div className="lg:col-span-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden sticky top-24">
-
-              {/* Header */}
-              <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
-                <Package size={18} className="text-gray-400" />
-                <h3 className="font-bold text-gray-900">Chi tiết đơn hàng</h3>
-                <span className="ml-auto text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                  {items.length} món
-                </span>
+              <div className="px-6 py-5 border-b border-gray-100">
+                <h3 className="font-bold text-gray-900">Tóm tắt thanh toán</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{items.length} sản phẩm · {Object.keys(shopGroups).length} shop</p>
               </div>
 
-              {/* Item list */}
-              <div className="px-6 py-4 space-y-4 max-h-[320px] overflow-y-auto">
-                {items.map((item) => (
-                  <div key={item.id} className="flex gap-3 items-center group">
-                    <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 bg-gray-50">
-                      <Image
-                        src={item.images?.[0] ?? '/placeholder.png'}
-                        alt={item.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute -top-1 -right-1 bg-gray-900 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                        {item.quantity}
+              {/* Per-shop breakdown */}
+              <div className="px-6 py-4 space-y-4 divide-y divide-dashed divide-gray-100">
+                {Object.entries(shopGroups).map(([shopId, shopItems]) => {
+                  const shopData = (shopItems[0] as any).shop;
+                  const shopName = shopData?.store_name || shopData?.name || 'Shop';
+                  const subtotal = shopItems.reduce((s, i) => s + i.price * i.quantity, 0);
+                  const sv = getShopVoucher(shopId);
+                  const discount = sv.discount_amount;
+                  return (
+                    <div key={shopId} className="pt-3 first:pt-0 space-y-1.5">
+                      <p className="text-xs font-bold text-gray-700 truncate">{shopName}</p>
+                      <div className="flex justify-between text-sm text-gray-500">
+                        <span>Tạm tính ({shopItems.reduce((s, i) => s + i.quantity, 0)} sp)</span>
+                        <span>{subtotal.toLocaleString()}đ</span>
                       </div>
+                      {discount > 0 && (
+                        <div className="flex justify-between text-sm text-orange-500 font-semibold">
+                          <span>Voucher ({sv.code})</span>
+                          <span>-{discount.toLocaleString()}đ</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{item.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{item.unit}</p>
-                    </div>
-                    <p className="text-sm font-bold text-gray-900 flex-shrink-0">
-                      {(item.price * item.quantity).toLocaleString()}đ
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Mã giảm giá */}
-              <div className="px-6 py-4 border-t border-dashed border-gray-200">
-                <div className="flex items-center justify-between mb-2.5">
-                  <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                    <Ticket size={14} className="text-orange-500"/> Mã giảm giá
-                  </p>
-                  {!discountApplied && (
-                    <button onClick={handleOpenWallet}
-                      className="flex items-center gap-1 text-xs font-semibold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-full transition border border-green-200">
-                      <Ticket size={12}/> Chọn từ ví <ChevronDown size={11}/>
-                    </button>
-                  )}
-                </div>
-                {discountApplied ? (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
-                    <div>
-                      <span className="text-sm font-bold text-green-700">{discountCode}</span>
-                      <p className="text-xs text-green-600 mt-0.5">Giảm {discountAmount.toLocaleString()}đ</p>
-                    </div>
-                    <button onClick={handleRemoveVoucher} className="text-gray-400 hover:text-red-500 ml-2"><X size={16}/></button>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={discountCode}
-                        onChange={e => { setDiscountCode(e.target.value.toUpperCase()); setVoucherError(''); }}
-                        placeholder="Nhập mã giảm giá"
-                        className="flex-1 px-3 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/10 uppercase font-medium"
-                      />
-                      <button
-                        onClick={handleApplyVoucher}
-                        disabled={voucherLoading || !discountCode.trim()}
-                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-bold rounded-lg transition whitespace-nowrap flex items-center gap-1"
-                      >
-                        {voucherLoading ? <Loader2 size={14} className="animate-spin" /> : null}
-                        Áp dụng
-                      </button>
-                    </div>
-                    {voucherError && (
-                      <div className="flex items-center gap-1.5 text-xs text-red-500">
-                        <AlertCircle size={12}/> {voucherError}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Ví Voucher Modal */}
-              {showVoucherWallet && (
-                <div className="mx-6 mb-4 border border-orange-200 rounded-xl overflow-hidden bg-orange-50/50 shadow-sm">
-                  <div className="flex items-center justify-between px-4 py-3 bg-orange-500 text-white">
-                    <p className="text-sm font-bold flex items-center gap-2"><Ticket size={14}/> Chọn voucher từ ví</p>
-                    <button onClick={() => setShowVoucherWallet(false)}><X size={16}/></button>
-                  </div>
-                  {loadingWallet ? (
-                    <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-orange-500" size={24}/></div>
-                  ) : savedVouchers.length === 0 ? (
-                    <div className="py-8 text-center text-sm text-gray-400">
-                      <Ticket size={32} className="mx-auto mb-2 text-gray-300"/>
-                      Ví voucher trống. Hãy ghé shop để lưu mã giảm giá!
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-orange-100 max-h-60 overflow-y-auto">
-                      {savedVouchers.map((sv: any) => {
-                        const v = sv.voucher || sv;
-                        const canUse = !sv.is_used && v.valid_to && new Date(v.valid_to) >= new Date() && totalPrice >= (v.min_order_value ?? 0);
-                        return (
-                          <button key={sv.id || v.id}
-                            onClick={() => canUse && handlePickVoucher(v.code)}
-                            disabled={!canUse}
-                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
-                              canUse ? 'hover:bg-orange-50 cursor-pointer' : 'opacity-50 cursor-not-allowed'
-                            }`}
-                          >
-                            <div className={`flex-shrink-0 w-14 h-14 rounded-lg flex flex-col items-center justify-center text-white text-xs font-black ${canUse ? 'bg-orange-500' : 'bg-gray-400'}`}>
-                              <span className="text-base leading-none">
-                                {v.discount_type === 'PERCENT' ? `${v.discount_value}%` : `${(v.discount_value/1000).toFixed(0)}K`}
-                              </span>
-                              <span className="text-[9px] opacity-80">GIẢM</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-black text-gray-800 text-sm tracking-wider">{v.code}</p>
-                              <p className="text-xs text-gray-500 truncate">
-                                {v.discount_type === 'PERCENT' ? `Giảm ${v.discount_value}% · Tối đa ${Number(v.max_discount_amount||0).toLocaleString()}đ` : `Giảm ${Number(v.discount_value).toLocaleString()}đ`}
-                              </p>
-                              <p className="text-[11px] text-gray-400">
-                                {!canUse && sv.is_used ? '✗ Đã dùng' :
-                                 !canUse && totalPrice < (v.min_order_value ?? 0) ? `✗ Cần đơn ≥ ${Number(v.min_order_value).toLocaleString()}đ` :
-                                 !canUse ? '✗ Hết hạn' :
-                                 `✓ Đơn tối thiểu ${Number(v.min_order_value).toLocaleString()}đ`}
-                              </p>
-                            </div>
-                            {canUse && <ChevronRight size={16} className="text-orange-400 flex-shrink-0"/>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Summary */}
+              {/* Totals */}
               <div className="px-6 py-4 border-t border-dashed border-gray-200 bg-gray-50/50 space-y-3">
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>Tạm tính</span>
-                  <span className="font-medium text-gray-700">{totalPrice.toLocaleString()}đ</span>
-                </div>
-                {discountApplied && discountAmount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-orange-500 font-semibold">Giảm giá ({discountCode})</span>
-                    <span className="font-bold text-orange-500">-{discountAmount.toLocaleString()}đ</span>
-                  </div>
-                )}
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>Phí vận chuyển</span>
                   <span className="font-semibold text-green-600 text-xs bg-green-50 px-2 py-0.5 rounded">Miễn phí</span>
                 </div>
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-orange-500 font-semibold">
+                    <span>Tổng giảm giá</span>
+                    <span>-{totalDiscount.toLocaleString()}đ</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-end pt-3 border-t border-gray-200">
                   <span className="font-bold text-gray-900 text-sm">Tổng cộng</span>
                   <div className="text-right">
-                    <p className="text-2xl font-black text-green-600 leading-none">
-                      {finalTotal.toLocaleString()}đ
-                    </p>
+                    {totalDiscount > 0 && <p className="text-xs text-gray-400 line-through">{totalPrice.toLocaleString()}đ</p>}
+                    <p className="text-2xl font-black text-green-600 leading-none">{finalTotal.toLocaleString()}đ</p>
                     <p className="text-[10px] text-gray-400 mt-0.5">Đã bao gồm thuế phí</p>
                   </div>
                 </div>
@@ -493,14 +453,15 @@ export default function CheckoutPage() {
       {showConfirmDialog && (
         <CheckoutConfirmDialog
           items={items}
+          shopGroups={shopGroups}
+          voucherByShop={voucherByShop}
           fullName={fullName}
           phoneNumber={phoneNumber}
           address={address}
           paymentMethod={paymentMethods.find(m => m.id === paymentMethod)!}
           totalPrice={totalPrice}
-          discountAmount={discountAmount}
+          totalDiscount={totalDiscount}
           finalTotal={finalTotal}
-          discountCode={discountApplied ? discountCode : ''}
           loading={loading}
           onClose={() => setShowConfirmDialog(false)}
           onConfirm={handlePlaceOrder}
@@ -514,19 +475,21 @@ export default function CheckoutPage() {
    CHECKOUT CONFIRM DIALOG
    ============================================================ */
 function CheckoutConfirmDialog({
-  items, fullName, phoneNumber, address,
-  paymentMethod, totalPrice, discountAmount, finalTotal, discountCode, loading,
+  items, shopGroups, voucherByShop,
+  fullName, phoneNumber, address,
+  paymentMethod, totalPrice, totalDiscount, finalTotal, loading,
   onClose, onConfirm
 }: {
   items: any[];
+  shopGroups: Record<string, any[]>;
+  voucherByShop: Record<string, any>;
   fullName: string;
   phoneNumber: string;
   address: string;
   paymentMethod: { id: string; title: string; sub: string; icon: React.ReactNode };
   totalPrice: number;
-  discountAmount: number;
+  totalDiscount: number;
   finalTotal: number;
-  discountCode: string;
   loading: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -640,18 +603,33 @@ function CheckoutConfirmDialog({
           </div>
 
           {/* Tổng tiền */}
-          <div className="bg-gray-900 rounded-xl p-5 text-white">
-            <div className="flex items-center justify-between">
+          <div className="bg-gray-900 rounded-xl p-5 text-white space-y-2">
+            {Object.entries(shopGroups).map(([shopId, shopItems]) => {
+              const shopData = (shopItems[0] as any).shop;
+              const shopName = shopData?.store_name || shopData?.name || 'Shop';
+              const subtotal = shopItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+              const sv = voucherByShop[shopId];
+              const discount = sv?.discount_amount ?? 0;
+              return (
+                <div key={shopId} className="flex justify-between text-sm text-gray-300">
+                  <span className="truncate max-w-[60%]">{shopName}</span>
+                  <span className="font-semibold">
+                    {discount > 0 ? (
+                      <><span className="line-through text-gray-500 text-xs mr-1">{subtotal.toLocaleString()}đ</span>{(subtotal - discount).toLocaleString()}đ</>
+                    ) : `${subtotal.toLocaleString()}đ`}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="border-t border-gray-700 pt-2 flex items-end justify-between">
               <div>
                 <p className="text-xs text-gray-400 font-medium">Tổng thanh toán</p>
-                {discountAmount > 0 && (
-                  <p className="text-sm text-gray-400 line-through mt-0.5">{totalPrice.toLocaleString()}đ</p>
+                {totalDiscount > 0 && (
+                  <p className="text-sm text-gray-400 line-through">{totalPrice.toLocaleString()}đ</p>
                 )}
-                <p className="text-2xl font-black text-green-400 mt-0.5">
-                  {finalTotal.toLocaleString()}đ
-                </p>
-                {discountCode && (
-                  <p className="text-xs text-orange-400 mt-1">Mã giảm: {discountCode} — -{discountAmount.toLocaleString()}đ</p>
+                <p className="text-2xl font-black text-green-400">{finalTotal.toLocaleString()}đ</p>
+                {totalDiscount > 0 && (
+                  <p className="text-xs text-orange-400">Đã giảm {totalDiscount.toLocaleString()}đ</p>
                 )}
                 <p className="text-[11px] text-gray-400 mt-1">Đã bao gồm phí vận chuyển miễn phí</p>
               </div>
