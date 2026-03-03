@@ -402,9 +402,13 @@ export default function ProfilePage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-5 mb-5 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Ví Voucher</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Mã giảm giá bạn đã lưu</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {savedVouchers.length > 0
+                        ? `${savedVouchers.filter((sv: any) => !sv.is_used && new Date(sv.voucher?.valid_to || sv.valid_to) >= new Date()).length} voucher có thể dùng`
+                        : 'Mã giảm giá bạn đã lưu'}
+                    </p>
                   </div>
-                  <Ticket size={22} className="text-gray-300" />
+                  <Ticket size={22} className="text-orange-400" />
                 </div>
 
                 {loadingVouchers ? (
@@ -416,52 +420,91 @@ export default function ProfilePage() {
                     <Ticket size={48} className="mx-auto text-gray-200 mb-4" />
                     <p className="text-gray-500 font-semibold">Chưa có voucher nào</p>
                     <p className="text-gray-400 text-sm mt-1">Ghé thăm các shop để lưu mã giảm giá nhé!</p>
+                    <Link href="/products" className="mt-5 inline-flex items-center gap-2 bg-green-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-green-700 transition">
+                      Khám phá shop ngay <ChevronRight size={15}/>
+                    </Link>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3">
                     {savedVouchers.map((sv: any) => {
                       const v = sv.voucher || sv;
                       const expired = v.valid_to && new Date(v.valid_to) < new Date();
                       const used = sv.is_used;
+                      const canUse = !used && !expired;
+                      const shopName = v.seller?.profile?.store_name || v.shop_name || 'Shop';
+                      const shopId = v.seller?.id || v.seller_id;
                       return (
                         <div key={sv.id || v.id}
-                          className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
-                            expired || used ? 'opacity-60' : 'border-green-200'
+                          className={`relative flex items-stretch rounded-xl overflow-hidden shadow-sm border transition ${
+                            canUse
+                              ? 'border-orange-200 bg-white hover:shadow-md'
+                              : 'border-gray-200 bg-gray-50 opacity-60'
                           }`}
                         >
-                          <div className={`px-4 py-3 flex items-center justify-between ${
-                            expired || used ? 'bg-gray-400' : 'bg-green-600'
+                          {/* Left — giá trị giảm */}
+                          <div className={`flex flex-col items-center justify-center px-5 py-4 min-w-[90px] text-white flex-shrink-0 ${
+                            canUse ? 'bg-gradient-to-b from-orange-500 to-orange-600' : 'bg-gray-400'
                           }`}>
-                            <div className="flex items-center gap-2 text-white">
-                              <Tag size={14} />
-                              <span className="font-black tracking-widest">{v.code}</span>
-                            </div>
-                            <span className="text-xs text-white/80 font-semibold">
-                              {used ? 'Đã dùng' : expired ? 'Hết hạn' : '✓ Có thể dùng'}
+                            <Tag size={16} className="mb-1 opacity-80"/>
+                            <span className={`font-black leading-none ${v.discount_type === 'PERCENT' ? 'text-2xl' : 'text-lg'}`}>
+                              {v.discount_type === 'PERCENT' ? `${v.discount_value}%` : `${(v.discount_value / 1000).toFixed(0)}K`}
                             </span>
+                            <span className="text-[10px] opacity-80 mt-0.5">GIẢM</span>
                           </div>
-                          <div className="p-4">
-                            <p className="text-xl font-black text-green-600">
-                              {v.discount_type === 'PERCENT'
-                                ? `Giảm ${v.discount_value}%`
-                                : `Giảm ${Number(v.discount_value).toLocaleString()}đ`
-                              }
-                            </p>
-                            {v.discount_type === 'PERCENT' && v.max_discount_amount > 0 && (
-                              <p className="text-xs text-gray-400">Tối đa {Number(v.max_discount_amount).toLocaleString()}đ</p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              Đơn từ {Number(v.min_order_value).toLocaleString()}đ
-                            </p>
-                            {v.valid_to && (
-                              <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                                <Clock size={10}/>
-                                HSD: {new Date(v.valid_to).toLocaleDateString('vi-VN')}
+
+                          {/* Notch phân cách hình coupon */}
+                          <div className={`absolute top-1/2 -translate-y-1/2 left-[78px] w-5 h-5 rounded-full z-10 ${
+                            canUse ? 'bg-orange-50 border border-orange-200' : 'bg-gray-100 border border-gray-200'
+                          }`}/>
+
+                          {/* Right — thông tin */}
+                          <div className="flex-1 px-5 py-4 border-l border-dashed border-gray-200 flex flex-col justify-between min-w-0">
+                            <div>
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-black text-gray-800 tracking-widest text-base">{v.code}</p>
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    {v.discount_type === 'PERCENT'
+                                      ? `Giảm ${v.discount_value}%${v.max_discount_amount > 0 ? ` · tối đa ${Number(v.max_discount_amount).toLocaleString()}đ` : ''}`
+                                      : `Giảm thẳng ${Number(v.discount_value).toLocaleString()}đ`}
+                                  </p>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                  used ? 'bg-gray-100 text-gray-500' :
+                                  expired ? 'bg-red-100 text-red-600' :
+                                  'bg-green-100 text-green-700'
+                                }`}>
+                                  {used ? 'Đã dùng' : expired ? 'Hết hạn' : '● Còn dùng'}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                                <p className="text-xs text-gray-400 flex items-center gap-1">
+                                  <span className="text-gray-500 font-semibold">Đơn tối thiểu:</span> {Number(v.min_order_value).toLocaleString()}đ
+                                </p>
+                                {v.valid_to && (
+                                  <p className="text-xs text-gray-400 flex items-center gap-1">
+                                    <Clock size={10}/>
+                                    HSD: {new Date(v.valid_to).toLocaleDateString('vi-VN')}
+                                  </p>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-400 mt-1">
+                                🏪 <span className="font-semibold text-gray-600">{shopName}</span>
                               </p>
+                            </div>
+
+                            {canUse && (
+                              <div className="flex gap-2 mt-3">
+                                <Link href={shopId ? `/shop/${shopId}` : '/products'}
+                                  className="flex-1 text-center text-xs font-bold text-green-600 border border-green-200 bg-green-50 hover:bg-green-100 px-3 py-2 rounded-lg transition">
+                                  Đến shop
+                                </Link>
+                                <Link href={`/cart`}
+                                  className="flex-1 text-center text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-2 rounded-lg transition">
+                                  Dùng ngay
+                                </Link>
+                              </div>
                             )}
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              Shop: <span className="font-semibold text-gray-600">{v.seller?.profile?.store_name || v.shop_name || '—'}</span>
-                            </p>
                           </div>
                         </div>
                       );

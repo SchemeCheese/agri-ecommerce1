@@ -51,8 +51,9 @@ export const ProductCard = ({
       description: description,
       category: category,
       origin: 'khac',
-      seasons: []
-    });
+      seasons: [],
+      seller_id: sellerId,
+    }, 1);
     alert(`Đã thêm ${title} vào giỏ!`);
   };
 

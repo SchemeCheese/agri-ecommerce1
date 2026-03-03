@@ -110,6 +110,7 @@ function SearchContent() {
                     price={formatCurrency(product.price)}
                     rawPrice={product.price}
                     unit={product.unit}
+                    sellerId={product.seller_id}
                   />
                 ))}
               </div>

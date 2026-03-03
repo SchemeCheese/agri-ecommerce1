@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Ticket, Trash2, Edit2, X, Loader2, CheckCircle2, AlertCircle, Tag, Clock } from 'lucide-react';
+import { Plus, Ticket, Trash2, Edit2, X, Loader2, CheckCircle2, AlertCircle, Tag, Clock, ToggleLeft, ToggleRight, History, User2, ShoppingBag } from 'lucide-react';
 import api from '@/lib/axios';
 
 interface Voucher {
@@ -37,6 +37,10 @@ export default function VouchersPage() {
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [toggleLoading, setToggleLoading] = useState<string | null>(null);
+  const [usageModal, setUsageModal] = useState<{ open: boolean; voucherId: string; code: string } | null>(null);
+  const [usageHistory, setUsageHistory] = useState<any[]>([]);
+  const [loadingUsage, setLoadingUsage] = useState(false);
 
   const fetchVouchers = () => {
     setLoading(true);
@@ -107,6 +111,32 @@ export default function VouchersPage() {
     }
   };
 
+  const handleToggle = async (v: Voucher) => {
+    setToggleLoading(v.id);
+    try {
+      await api.patch(`/vouchers/${v.id}`, { is_active: !v.is_active });
+      setVouchers(prev => prev.map(x => x.id === v.id ? { ...x, is_active: !v.is_active } : x));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Lỗi khi cập nhật trạng thái.');
+    } finally {
+      setToggleLoading(null);
+    }
+  };
+
+  const handleOpenUsage = async (v: Voucher) => {
+    setUsageModal({ open: true, voucherId: v.id, code: v.code });
+    setUsageHistory([]);
+    setLoadingUsage(true);
+    try {
+      const res = await api.get(`/vouchers/${v.id}/usage`);
+      setUsageHistory(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Usage history error:', err);
+    } finally {
+      setLoadingUsage(false);
+    }
+  };
+
   const isExpired = (validTo: string) => new Date(validTo) < new Date();
   const isActive = (v: Voucher) => v.is_active && !isExpired(v.valid_to) && v.used_count < v.usage_limit;
 
@@ -153,16 +183,13 @@ export default function VouchersPage() {
                 }`}
               >
                 {/* Top bar */}
-                <div className={`px-5 py-3 flex items-center justify-between ${active ? 'bg-green-600' : 'bg-gray-400'}`}>
+                <div className={`px-5 py-3 flex items-center justify-between ${active ? 'bg-green-600' : expired ? 'bg-red-400' : !v.is_active ? 'bg-gray-500' : 'bg-amber-500'}`}>
                   <div className="flex items-center gap-2 text-white">
                     <Tag size={16} />
                     <span className="font-black tracking-widest text-lg">{v.code}</span>
                   </div>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                    active ? 'bg-white/20 text-white' :
-                    expired ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {active ? '✓ Đang hoạt động' : expired ? 'Hết hạn' : 'Hết lượt'}
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                    {active ? '✓ Đang hoạt động' : expired ? 'Hết hạn' : !v.is_active ? 'Đã tắt' : 'Hết lượt'}
                   </span>
                 </div>
 
@@ -205,18 +232,112 @@ export default function VouchersPage() {
 
                   <div className="flex gap-2 pt-1">
                     <button onClick={() => handleOpenEdit(v)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">
                       <Edit2 size={13} /> Sửa
+                    </button>
+                    <button
+                      onClick={() => handleToggle(v)}
+                      disabled={toggleLoading === v.id}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border transition-colors ${
+                        v.is_active
+                          ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                          : 'text-green-600 bg-green-50 hover:bg-green-100 border-green-200'
+                      } disabled:opacity-50`}
+                    >
+                      {toggleLoading === v.id
+                        ? <Loader2 size={13} className="animate-spin" />
+                        : v.is_active ? <ToggleLeft size={14} /> : <ToggleRight size={14} />}
+                      {v.is_active ? 'Tắt' : 'Bật'}
+                    </button>
+                    <button onClick={() => handleOpenUsage(v)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-100 transition-colors">
+                      <History size={13} /> Lịch sử
                     </button>
                     <button onClick={() => handleDelete(v.id, v.code)}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors">
-                      <Trash2 size={13} /> Xóa
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Usage History Modal */}
+      {usageModal?.open && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <History size={18} className="text-blue-500" />
+                  Lịch sử sử dụng — <span className="text-blue-600 font-black tracking-widest">{usageModal.code}</span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">Danh sách các đơn hàng đã áp dụng mã này</p>
+              </div>
+              <button onClick={() => setUsageModal(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingUsage ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="animate-spin text-blue-500" size={28} />
+                </div>
+              ) : usageHistory.length === 0 ? (
+                <div className="text-center py-12">
+                  <ShoppingBag className="mx-auto text-gray-200 mb-3" size={40} />
+                  <p className="text-gray-500 font-semibold">Chưa có ai sử dụng mã này</p>
+                  <p className="text-gray-400 text-sm mt-1">Chia sẻ voucher của bạn để thu hút khách hàng!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-400 font-bold uppercase px-1">
+                    <span className="w-5">#</span>
+                    <span className="flex-1">Khách hàng</span>
+                    <span className="w-32 text-right">Đơn hàng</span>
+                    <span className="w-28 text-right">Trị giá đơn</span>
+                    <span className="w-24 text-right">Tiết kiệm</span>
+                    <span className="w-28 text-right">Ngày dùng</span>
+                  </div>
+                  {usageHistory.map((entry: any, idx: number) => (
+                    <div key={entry.order_id ?? idx} className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-3 text-sm">
+                      <span className="w-5 text-gray-400 font-bold text-xs">{idx + 1}</span>
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center">
+                          <User2 size={13} className="text-green-600" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800 text-xs">{entry.buyer_name || 'Khách hàng'}</p>
+                          <p className="text-gray-400 text-xs">{entry.buyer_email || ''}</p>
+                        </div>
+                      </div>
+                      <span className="w-32 text-right text-xs font-mono text-blue-600">#{(entry.order_id || '').toString().slice(-8).toUpperCase()}</span>
+                      <span className="w-28 text-right font-semibold text-gray-700">{Number(entry.order_total || 0).toLocaleString()}đ</span>
+                      <span className="w-24 text-right font-bold text-green-600">-{Number(entry.discount_applied || 0).toLocaleString()}đ</span>
+                      <span className="w-28 text-right text-xs text-gray-400">
+                        {entry.used_at ? new Date(entry.used_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="border-t border-gray-100 pt-3 flex justify-between text-sm font-bold px-1">
+                    <span className="text-gray-500">Tổng {usageHistory.length} lượt dùng</span>
+                    <span className="text-green-600">
+                      Đã tiết kiệm: {usageHistory.reduce((s, e) => s + Number(e.discount_applied || 0), 0).toLocaleString()}đ
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setUsageModal(null)}
+                className="w-full py-2.5 rounded-xl border-2 border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-all">
+                Đóng
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

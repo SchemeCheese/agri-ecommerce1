@@ -9,7 +9,7 @@ import { Container } from '@/components/ui/Container';
 import { 
   MapPin, CreditCard, Loader2, ChevronRight, 
   Wallet, Building, Truck, ShieldCheck, Package,
-  X, User, Phone, CheckCircle2, Tag, AlertCircle, Ticket
+  X, User, Phone, CheckCircle2, Tag, AlertCircle, Ticket, ChevronDown
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -26,6 +26,10 @@ export default function CheckoutPage() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState('');
+  // Ví voucher đã lưu
+  const [savedVouchers, setSavedVouchers] = useState<any[]>([]);
+  const [showVoucherWallet, setShowVoucherWallet] = useState(false);
+  const [loadingWallet, setLoadingWallet] = useState(false);
 
   const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -66,6 +70,10 @@ export default function CheckoutPage() {
     try {
       // Get seller_id from first item (single seller checkout assumption)
       const sellerId = items[0]?.seller_id || '';
+      if (!sellerId) {
+        setVoucherError('Không xác định được shop. Vui lòng thêm sản phẩm lại vào giỏ.');
+        return;
+      }
       const res = await api.post('/vouchers/validate', {
         code: discountCode.trim().toUpperCase(),
         seller_id: sellerId,
@@ -85,6 +93,45 @@ export default function CheckoutPage() {
     setDiscountCode('');
     setDiscountAmount(0);
     setVoucherError('');
+  };
+
+  // Fetch ví voucher đã lưu
+  const handleOpenWallet = async () => {
+    setShowVoucherWallet(true);
+    if (savedVouchers.length > 0) return;
+    setLoadingWallet(true);
+    try {
+      const res = await api.get('/vouchers/saved');
+      setSavedVouchers(Array.isArray(res.data) ? res.data : []);
+    } catch { setSavedVouchers([]); }
+    finally { setLoadingWallet(false); }
+  };
+
+  // Chọn voucher từ ví và auto-validate
+  const handlePickVoucher = async (code: string) => {
+    setShowVoucherWallet(false);
+    setDiscountCode(code);
+    setVoucherError('');
+    setVoucherLoading(true);
+    try {
+      const sellerId = items[0]?.seller_id || '';
+      if (!sellerId) {
+        setVoucherError('Không xác định được shop. Vui lòng thêm sản phẩm lại vào giỏ.');
+        setVoucherLoading(false);
+        return;
+      }
+      const res = await api.post('/vouchers/validate', {
+        code: code.toUpperCase(),
+        seller_id: sellerId,
+        order_total: totalPrice,
+      });
+      setDiscountAmount(res.data.discount_amount || 0);
+      setDiscountApplied(true);
+    } catch (err: any) {
+      setVoucherError(err.response?.data?.message || 'Mã không áp dụng được cho đơn này.');
+    } finally {
+      setVoucherLoading(false);
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -284,9 +331,17 @@ export default function CheckoutPage() {
 
               {/* Mã giảm giá */}
               <div className="px-6 py-4 border-t border-dashed border-gray-200">
-                <p className="text-sm font-bold text-gray-700 mb-2.5 flex items-center gap-2">
-                  <Ticket size={14} className="text-orange-500"/> Mã giảm giá
-                </p>
+                <div className="flex items-center justify-between mb-2.5">
+                  <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Ticket size={14} className="text-orange-500"/> Mã giảm giá
+                  </p>
+                  {!discountApplied && (
+                    <button onClick={handleOpenWallet}
+                      className="flex items-center gap-1 text-xs font-semibold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-full transition border border-green-200">
+                      <Ticket size={12}/> Chọn từ ví <ChevronDown size={11}/>
+                    </button>
+                  )}
+                </div>
                 {discountApplied ? (
                   <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
                     <div>
@@ -322,6 +377,60 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </div>
+
+              {/* Ví Voucher Modal */}
+              {showVoucherWallet && (
+                <div className="mx-6 mb-4 border border-orange-200 rounded-xl overflow-hidden bg-orange-50/50 shadow-sm">
+                  <div className="flex items-center justify-between px-4 py-3 bg-orange-500 text-white">
+                    <p className="text-sm font-bold flex items-center gap-2"><Ticket size={14}/> Chọn voucher từ ví</p>
+                    <button onClick={() => setShowVoucherWallet(false)}><X size={16}/></button>
+                  </div>
+                  {loadingWallet ? (
+                    <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-orange-500" size={24}/></div>
+                  ) : savedVouchers.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-gray-400">
+                      <Ticket size={32} className="mx-auto mb-2 text-gray-300"/>
+                      Ví voucher trống. Hãy ghé shop để lưu mã giảm giá!
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-orange-100 max-h-60 overflow-y-auto">
+                      {savedVouchers.map((sv: any) => {
+                        const v = sv.voucher || sv;
+                        const canUse = !sv.is_used && v.valid_to && new Date(v.valid_to) >= new Date() && totalPrice >= (v.min_order_value ?? 0);
+                        return (
+                          <button key={sv.id || v.id}
+                            onClick={() => canUse && handlePickVoucher(v.code)}
+                            disabled={!canUse}
+                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
+                              canUse ? 'hover:bg-orange-50 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className={`flex-shrink-0 w-14 h-14 rounded-lg flex flex-col items-center justify-center text-white text-xs font-black ${canUse ? 'bg-orange-500' : 'bg-gray-400'}`}>
+                              <span className="text-base leading-none">
+                                {v.discount_type === 'PERCENT' ? `${v.discount_value}%` : `${(v.discount_value/1000).toFixed(0)}K`}
+                              </span>
+                              <span className="text-[9px] opacity-80">GIẢM</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-black text-gray-800 text-sm tracking-wider">{v.code}</p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {v.discount_type === 'PERCENT' ? `Giảm ${v.discount_value}% · Tối đa ${Number(v.max_discount_amount||0).toLocaleString()}đ` : `Giảm ${Number(v.discount_value).toLocaleString()}đ`}
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                {!canUse && sv.is_used ? '✗ Đã dùng' :
+                                 !canUse && totalPrice < (v.min_order_value ?? 0) ? `✗ Cần đơn ≥ ${Number(v.min_order_value).toLocaleString()}đ` :
+                                 !canUse ? '✗ Hết hạn' :
+                                 `✓ Đơn tối thiểu ${Number(v.min_order_value).toLocaleString()}đ`}
+                              </p>
+                            </div>
+                            {canUse && <ChevronRight size={16} className="text-orange-400 flex-shrink-0"/>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Summary */}
               <div className="px-6 py-4 border-t border-dashed border-gray-200 bg-gray-50/50 space-y-3">

@@ -112,6 +112,7 @@ export const ProductList = () => {
                 rawPrice={product.price} 
                 slug={product.id}
                 category={product.category as any}
+                sellerId={product.seller_id}
               />
             ))
           ) : (
