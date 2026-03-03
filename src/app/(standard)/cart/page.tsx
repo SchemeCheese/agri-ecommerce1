@@ -64,9 +64,9 @@ export default function CartPage() {
     .filter((item) => selectedItems.includes(item.id))
     .reduce((total, item) => total + item.quantity, 0);
 
-  // Group items by shop
+  // Group items by shop — ưu tiên shop.id (từ BE), fallback sang seller_id
   const shopGroups = items.reduce((acc, item) => {
-    const shopId = (item as any).shop?.id || item.seller_id || 'unknown';
+    const shopId = item.shop?.id ?? item.seller_id ?? 'unknown';
     if (!acc[shopId]) acc[shopId] = [];
     acc[shopId].push(item);
     return acc;
@@ -123,10 +123,14 @@ export default function CartPage() {
 
           {/* List Item — grouped by shop */}
           {Object.entries(shopGroups).map(([shopId, shopItems]) => {
-            const shopData = (shopItems[0] as any).shop;
-            const shopName = shopData?.store_name || shopData?.name || 'Shop';
-            const shopAvatar = shopData?.avatar_url || shopData?.avatar || null;
+            const shopData = shopItems[0].shop;
+            const shopName = shopData?.store_name ?? `Shop #${shopId.slice(-6)}`;
+            const shopAvatar = shopData?.avatar_url ?? null;
             const allSelected = shopItems.every(i => selectedItems.includes(i.id));
+            const shopSubtotal = shopItems.reduce((s, i) => s + i.price * i.quantity, 0);
+            const selectedShopTotal = shopItems
+              .filter(i => selectedItems.includes(i.id))
+              .reduce((s, i) => s + i.price * i.quantity, 0);
             return (
               <div key={shopId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 {/* Shop header */}
@@ -157,7 +161,7 @@ export default function CartPage() {
 
                 {/* Shop items */}
                 {shopItems.map((item) => (
-                  <div key={item.id} className="flex flex-col sm:flex-row items-center p-4 gap-4 border-b border-gray-50 last:border-0 transition-all hover:bg-gray-50/50">
+                  <div key={item.id} className="flex flex-col sm:flex-row items-center p-4 gap-4 border-b border-gray-50 last:border-b transition-all hover:bg-gray-50/50">
                     <div className="flex items-center gap-4 w-full sm:w-auto">
                       <input
                         type="checkbox"
@@ -207,6 +211,19 @@ export default function CartPage() {
                     </div>
                   </div>
                 ))}
+
+                {/* Per-shop subtotal footer */}
+                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-100">
+                  <span className="text-sm text-gray-500">
+                    Tổng shop ({shopItems.filter(i => selectedItems.includes(i.id)).length}/{shopItems.length} đã chọn):
+                  </span>
+                  <div className="text-right">
+                    {selectedShopTotal > 0 && selectedShopTotal < shopSubtotal && (
+                      <span className="text-xs text-gray-400 mr-2">Đã chọn: <span className="font-bold text-green-600">{formatCurrency(selectedShopTotal)}</span></span>
+                    )}
+                    <span className="text-sm font-bold text-gray-800">{formatCurrency(shopSubtotal)}</span>
+                  </div>
+                </div>
               </div>
             );
           })}

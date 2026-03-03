@@ -38,12 +38,12 @@ const ShopInfoCard = ({ shop }: { shop: any }) => (
     {/* Avatar & Tên */}
     <div className="flex items-center gap-4 border-r border-gray-100 pr-6 min-w-[300px]">
       <div className="relative w-16 h-16 rounded-full overflow-hidden border">
-        <Image src={fixImg(shop.avatar || '')} alt={shop.name} fill className="object-cover" />
+        <Image src={fixImg(shop.avatar_url || '')} alt={shop.store_name} fill className="object-cover" />
       </div>
       <div>
-        <h3 className="font-bold text-gray-900">{shop.name}</h3>
+        <h3 className="font-bold text-gray-900">{shop.store_name}</h3>
         <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-          <MapPin size={12} /> {shop.location}
+          <MapPin size={12} /> {shop.location ?? 'Chưa cập nhật'}
         </p>
         <div className="flex gap-2 mt-2">
           <Link href={`/chat?sellerId=${shop.id}`} className="flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded border border-green-200 font-medium">
@@ -83,8 +83,9 @@ export default function ProductClient({ product, allProducts }: { product: any, 
   const router = useRouter();
 
   const handleBuyNow = () => {
+    const shopName = product.shop?.store_name || product.shop?.name || '';
     router.push(
-      `/checkout?bn=1&id=${encodeURIComponent(product.id)}&qty=${quantity}&price=${encodeURIComponent(product.price)}&sellerId=${encodeURIComponent(product.seller_id || '')}&name=${encodeURIComponent(product.name)}&img=${encodeURIComponent(fixImg(product.images?.[0] || ''))}&unit=${encodeURIComponent(product.unit || '')}`
+      `/checkout?bn=1&id=${encodeURIComponent(product.id)}&qty=${quantity}&price=${encodeURIComponent(product.price)}&sellerId=${encodeURIComponent(product.seller_id || product.shop?.id || '')}&shopName=${encodeURIComponent(shopName)}&name=${encodeURIComponent(product.name)}&img=${encodeURIComponent(fixImg(product.images?.[0] || ''))}&unit=${encodeURIComponent(product.unit || '')}`
     );
   };
 

@@ -17,6 +17,11 @@ interface ProductCardProps {
   slug?: string;
   category?: ProductCategory;
   sellerId?: string;
+  shop?: {
+    id: string;
+    store_name: string;
+    avatar_url: string | null;
+  };
   stock?: number;
   unit?: string;
   createdAt?: Date;
@@ -32,6 +37,7 @@ export const ProductCard = ({
   slug = '', 
   category = 'khac', 
   sellerId = '', 
+  shop,
   stock = 0, 
   unit = '', 
   createdAt = new Date() 
@@ -42,15 +48,17 @@ export const ProductCard = ({
     e.preventDefault();
     e.stopPropagation(); 
     
+    // Ưu tiên dùng shop object đầy đủ (ắt từ BE), fallback sang sellerId
+    const shopObj = shop ?? (sellerId ? { id: sellerId, store_name: '', avatar_url: null } : undefined);
     addToCart({
       id: id,
       name: title,
       price: rawPrice,
       images: [imageUrl],
       slug: slug,
-      seller_id: sellerId,
+      seller_id: shopObj?.id || sellerId,
       unit: unit || 'kg',
-      shop: sellerId ? { id: sellerId, store_name: '', avatar_url: null } : undefined,
+      shop: shopObj,
     }, 1);
     alert(`Đã thêm ${title} vào giỏ!`);
   };

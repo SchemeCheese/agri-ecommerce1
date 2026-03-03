@@ -113,6 +113,12 @@ export const ProductList = () => {
                 slug={product.id}
                 category={product.category as any}
                 sellerId={product.seller_id}
+                unit={product.unit}
+                shop={product.shop ? {
+                  id: product.shop.id,
+                  store_name: product.shop.store_name || product.shop.name || '',
+                  avatar_url: product.shop.avatar_url || null,
+                } : undefined}
               />
             ))
           ) : (

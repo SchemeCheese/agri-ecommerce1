@@ -9,7 +9,7 @@ import { Container } from '@/components/ui/Container';
 import { 
   MapPin, CreditCard, Loader2, ChevronRight, 
   Wallet, Building, Truck, ShieldCheck, Package,
-  X, User, Phone, CheckCircle2, Tag, AlertCircle, Ticket, Store
+  X, User, Phone, CheckCircle2, AlertCircle, Ticket, Store, ChevronDown
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -28,6 +28,22 @@ export default function CheckoutPage() {
   const getShopVoucher = (shopId: string): ShopVoucher =>
     voucherByShop[shopId] ?? { inputCode: '', code: '', discount_amount: 0, isValidating: false, error: '' };
 
+  // Saved vouchers — và picker state
+  const [savedVouchers, setSavedVouchers] = useState<any[]>([]);
+  const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null); // shopId đang mở picker
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Đóng picker khi click ra ngoài
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpenFor(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [fullName, setFullName] = useState('');
@@ -36,10 +52,14 @@ export default function CheckoutPage() {
   useEffect(() => {
     setMounted(true);
     if (user) setFullName(user.full_name || '');
+    // Tải voucher đã lưu của user
+    api.get('/vouchers/saved').then(r => setSavedVouchers(r.data || [])).catch(() => {});
   }, [user]);
 
   const searchParams = useSearchParams();
   const isBuyNow = searchParams?.get('bn') === '1';
+  const buyNowSellerId = decodeURIComponent(searchParams?.get('sellerId') || '');
+  const buyNowShopName = decodeURIComponent(searchParams?.get('shopName') || '');
   const buyNowItem = isBuyNow ? {
     id: searchParams!.get('id') || '',
     name: decodeURIComponent(searchParams!.get('name') || ''),
@@ -47,7 +67,12 @@ export default function CheckoutPage() {
     quantity: Number(searchParams!.get('qty') || 1),
     images: [decodeURIComponent(searchParams!.get('img') || '')],
     unit: decodeURIComponent(searchParams!.get('unit') || ''),
-    seller_id: decodeURIComponent(searchParams!.get('sellerId') || ''),
+    seller_id: buyNowSellerId,
+    shop: buyNowSellerId ? {
+      id: buyNowSellerId,
+      store_name: buyNowShopName || `Shop #${buyNowSellerId.slice(-6)}`,
+      avatar_url: null as string | null,
+    } : undefined,
   } : null;
 
   const selectedIds = searchParams?.get('ids')?.split(',').filter(Boolean) ?? [];
@@ -59,13 +84,13 @@ export default function CheckoutPage() {
       : allCartItems;
   const totalPrice = items.reduce((total, item) => total + item.price * item.quantity, 0);
 
-  // Group items by shop (supports both new shop obj and legacy seller_id)
-  const shopGroups: Record<string, typeof items> = items.reduce((acc, item) => {
-    const shopId = (item as any).shop?.id || item.seller_id || 'unknown';
+  // Group items by shop — dùng seller_id làm key chính (đồng nhất với backend)
+  const shopGroups: Record<string, any[]> = items.reduce((acc: Record<string, any[]>, item: any) => {
+    const shopId = item.seller_id || item.shop?.id || 'unknown';
     if (!acc[shopId]) acc[shopId] = [];
     acc[shopId].push(item);
     return acc;
-  }, {} as Record<string, typeof items>);
+  }, {} as Record<string, any[]>);
 
   const totalDiscount = Object.values(voucherByShop).reduce((s, v) => s + (v.discount_amount ?? 0), 0);
   const finalTotal = Math.max(0, totalPrice - totalDiscount);
@@ -283,7 +308,7 @@ export default function CheckoutPage() {
                         ? <Image src={shopAvatar} alt={shopName} fill className="object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-gray-400"><Store size={15} /></div>}
                     </div>
-                    <span className="font-bold text-gray-800">{shopName}</span>
+                    <span className="font-bold text-gray-800">{shopName || `Shop #${shopId.slice(-6)}`}</span>
                     <span className="ml-auto text-xs text-gray-400">{shopItems.length} sản phẩm</span>
                   </div>
 
@@ -304,58 +329,18 @@ export default function CheckoutPage() {
                     ))}
                   </div>
 
-                  {/* Per-shop voucher */}
-                  <div className="px-5 py-4 border-t border-dashed border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
-                        <Ticket size={13} className="text-orange-500" /> Mã giảm giá shop
-                      </span>
-                      {sv.code && (
-                        <button onClick={() => handleRemoveShopVoucher(shopId)} className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1">
-                          <X size={11} /> Xóa
-                        </button>
-                      )}
-                    </div>
-                    {sv.code ? (
-                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                        <div>
-                          <span className="text-sm font-bold text-green-700">{sv.code}</span>
-                          <p className="text-xs text-green-600">Giảm {sv.discount_amount.toLocaleString()}đ</p>
-                        </div>
-                        <CheckCircle2 size={15} className="text-green-500" />
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={sv.inputCode}
-                            onChange={e => setVoucherInput(shopId, e.target.value.toUpperCase())}
-                            placeholder="Nhập mã giảm giá"
-                            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-green-500 uppercase font-medium"
-                          />
-                          <button
-                            onClick={() => handleApplyShopVoucher(shopId, sv.inputCode, subtotal)}
-                            disabled={sv.isValidating || !sv.inputCode.trim()}
-                            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-bold rounded-lg transition flex items-center gap-1"
-                          >
-                            {sv.isValidating && <Loader2 size={13} className="animate-spin" />}
-                            Áp dụng
-                          </button>
-                        </div>
-                        {sv.error && (
-                          <p className="flex items-center gap-1 text-xs text-red-500"><AlertCircle size={12} /> {sv.error}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Shop subtotal */}
-                  <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                    <span className="text-sm text-gray-500">Tổng shop:</span>
+                  {/* Footer: Tổng shop */}
+                  <div className="px-5 py-3 border-t border-dashed border-gray-100 flex justify-between items-center">
+                    <span className="text-xs text-gray-400">Tổng shop</span>
                     <div className="text-right">
-                      {sv.discount_amount > 0 && <p className="text-xs text-gray-400 line-through">{subtotal.toLocaleString()}đ</p>}
-                      <p className="font-bold text-gray-900">{(subtotal - sv.discount_amount).toLocaleString()}đ</p>
+                      {sv.discount_amount > 0 ? (
+                        <>
+                          <p className="text-xs text-gray-400 line-through">{subtotal.toLocaleString()}đ</p>
+                          <p className="text-base font-black text-green-600">{(subtotal - sv.discount_amount).toLocaleString()}đ</p>
+                        </>
+                      ) : (
+                        <p className="text-base font-black text-gray-900">{subtotal.toLocaleString()}đ</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -380,7 +365,7 @@ export default function CheckoutPage() {
                   const sv = getShopVoucher(shopId);
                   const discount = sv.discount_amount;
                   return (
-                    <div key={shopId} className="pt-3 first:pt-0 space-y-1.5">
+                    <div key={shopId} className="pt-3 first:pt-0 space-y-2">
                       <p className="text-xs font-bold text-gray-700 truncate">{shopName}</p>
                       <div className="flex justify-between text-sm text-gray-500">
                         <span>Tạm tính ({shopItems.reduce((s, i) => s + i.quantity, 0)} sp)</span>
@@ -392,6 +377,112 @@ export default function CheckoutPage() {
                           <span>-{discount.toLocaleString()}đ</span>
                         </div>
                       )}
+
+                      {/* Voucher input */}
+                      <div className="mt-1">
+                        {sv.code ? (
+                          /* Voucher đã áp dụng */
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 flex-1 min-w-0">
+                              <Ticket size={14} className="text-orange-500 flex-shrink-0" />
+                              <span className="text-sm font-bold text-orange-600 truncate">{sv.code}</span>
+                              <span className="text-xs text-orange-500 flex-shrink-0">−{sv.discount_amount.toLocaleString()}đ</span>
+                              <CheckCircle2 size={14} className="text-green-500 flex-shrink-0 ml-auto" />
+                            </div>
+                            <button
+                              onClick={() => handleRemoveShopVoucher(shopId)}
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
+                              title="Xóa mã"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2" ref={pickerOpenFor === shopId ? pickerRef : undefined}>
+                            {/* Input row */}
+                            <div className="flex gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-1 border border-gray-200 rounded-lg overflow-hidden focus-within:border-orange-400 transition bg-white">
+                                <Ticket size={14} className="text-orange-400 ml-2.5 flex-shrink-0" />
+                                <input
+                                  type="text"
+                                  value={sv.inputCode}
+                                  onChange={e => setVoucherInput(shopId, e.target.value.toUpperCase())}
+                                  onKeyDown={e => e.key === 'Enter' && handleApplyShopVoucher(shopId, sv.inputCode, subtotal)}
+                                  placeholder="Nhập mã giảm giá"
+                                  className="flex-1 py-2.5 text-sm outline-none uppercase font-medium placeholder:normal-case placeholder:font-normal bg-transparent"
+                                />
+                              </div>
+                              <button
+                                onClick={() => handleApplyShopVoucher(shopId, sv.inputCode, subtotal)}
+                                disabled={sv.isValidating || !sv.inputCode.trim()}
+                                className="px-3 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-200 text-white text-sm font-bold rounded-lg transition flex items-center gap-1 flex-shrink-0"
+                              >
+                                {sv.isValidating ? <Loader2 size={13} className="animate-spin" /> : 'Áp dụng'}
+                              </button>
+                            </div>
+
+                            {sv.error && (
+                              <p className="flex items-center gap-1 text-xs text-red-500 pl-1">
+                                <AlertCircle size={12} /> {sv.error}
+                              </p>
+                            )}
+
+                            {/* Nút mở ví voucher */}
+                            <button
+                              onClick={() => setPickerOpenFor(pickerOpenFor === shopId ? null : shopId)}
+                              className="w-full flex items-center justify-between px-3 py-2 border border-dashed border-orange-300 rounded-lg text-orange-500 hover:bg-orange-50 transition text-sm font-medium"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <Ticket size={14} /> Chọn từ mã đã lưu
+                              </span>
+                              <ChevronDown size={14} className={`transition-transform ${pickerOpenFor === shopId ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {/* Panel mã đã lưu */}
+                            {pickerOpenFor === shopId && (
+                              <div ref={pickerRef} className="border border-orange-200 rounded-xl overflow-hidden bg-orange-50/40">
+                                <div className="px-3 py-2 bg-orange-500 text-white text-xs font-bold flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5"><Ticket size={12} /> Mã đã lưu của bạn</span>
+                                  <button onClick={() => setPickerOpenFor(null)}><X size={14} /></button>
+                                </div>
+                                {savedVouchers.length === 0 ? (
+                                  <div className="py-6 text-center text-sm text-gray-400">
+                                    <Ticket size={28} className="mx-auto mb-2 text-gray-300" />
+                                    Chưa có mã nào được lưu
+                                  </div>
+                                ) : (
+                                  <div className="divide-y divide-orange-100 max-h-52 overflow-y-auto">
+                                    {savedVouchers.map((v: any) => {
+                                      const vd = v.voucher || v;
+                                      const canUse = !v.is_used && (!vd.valid_to || new Date(vd.valid_to) >= new Date()) && subtotal >= (vd.min_order_value ?? 0);
+                                      return (
+                                        <button
+                                          key={v.id || vd.code}
+                                          onClick={() => { if (canUse) { setVoucherInput(shopId, vd.code); setPickerOpenFor(null); handleApplyShopVoucher(shopId, vd.code, subtotal); } }}
+                                          disabled={!canUse}
+                                          className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${canUse ? 'hover:bg-orange-50 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                        >
+                                          <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                                            <Ticket size={16} className="text-orange-500" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-gray-800">{vd.code}</p>
+                                            <p className="text-xs text-gray-500 truncate">
+                                              {vd.description || `Giảm ${vd.discount_type === 'percentage' ? vd.discount_value + '%' : ((vd.discount_value || 0)).toLocaleString() + 'đ'}`}
+                                            </p>
+                                            {!canUse && <p className="text-[10px] text-red-400 mt-0.5">Không áp dụng được cho đơn này</p>}
+                                          </div>
+                                          {canUse && <ChevronRight size={14} className="text-orange-400 flex-shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

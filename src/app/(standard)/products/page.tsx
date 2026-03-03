@@ -212,6 +212,13 @@ export default function ProductListingPage() {
                     description={product.description}
                     price={formatCurrency(product.price)}
                     rawPrice={product.price}
+                    sellerId={product.seller_id}
+                    unit={product.unit}
+                    shop={product.shop ? {
+                      id: product.shop.id,
+                      store_name: product.shop.store_name || product.shop.name || '',
+                      avatar_url: product.shop.avatar_url || null,
+                    } : undefined}
                   />
                 ))}
               </div>
