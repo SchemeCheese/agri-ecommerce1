@@ -8,10 +8,12 @@ import { useCartStore } from '@/store/useCartStore';
 import { formatCurrency } from '@/utils/vi';
 import {
   ShoppingCart, Plus, Minus, Star, Ticket, Truck,
-  MapPin, MessageCircle, Store, ChevronRight, ThumbsUp, Handshake
+  MapPin, MessageCircle, Store, ChevronRight, ThumbsUp, Handshake, Loader2
 } from 'lucide-react';
 import { ChatWidget } from '@/components/home/ChatWidget';
 import { NegotiationDialog } from '@/components/chat/NegotiationDialog';
+import { ChatPopoverWindow } from '@/components/chat/ChatPopoverWindow';
+import api from '@/lib/axios';
 
 const BACKEND_URL = 'http://localhost:3001';
 const fixImg = (url: string) => {
@@ -34,7 +36,23 @@ const RatingStars = ({ rating }: { rating: number }) => (
 );
 
 // --- SUB-COMPONENT: Shop Info Card ---
-const ShopInfoCard = ({ shop }: { shop: any }) => (
+const ShopInfoCard = ({ shop, product }: { shop: any; product: any }) => {
+  const router = useRouter();
+  const [chatShopLoading, setChatShopLoading] = useState(false);
+
+  const handleChatShop = async () => {
+    setChatShopLoading(true);
+    try {
+      const res = await api.post('/chat/initiate', { partnerId: shop.id });
+      router.push(`/chat?conversationId=${res.data.conversationId}`);
+    } catch (err) {
+      console.error('Chat initiate error:', err);
+    } finally {
+      setChatShopLoading(false);
+    }
+  };
+
+  return (
   <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row items-center gap-4">
     {/* Avatar & Tên */}
     <div className="flex items-center gap-4 border-r border-gray-100 pr-6 min-w-[300px]">
@@ -46,10 +64,16 @@ const ShopInfoCard = ({ shop }: { shop: any }) => (
         <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
           <MapPin size={12} /> {shop.location ?? 'Chưa cập nhật'}
         </p>
-        <div className="flex gap-2 mt-2">
-          <Link href={`/chat?sellerId=${shop.id}`} className="flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded border border-green-200 font-medium">
-            <MessageCircle size={12} /> Chat ngay
-          </Link>
+        <div className="flex gap-2 mt-2 flex-wrap">
+          {/* Chat với shop — chat tự do, không kèm sản phẩm */}
+          <button
+            onClick={handleChatShop}
+            disabled={chatShopLoading}
+            className="flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded border border-green-200 font-medium hover:bg-green-100 transition disabled:opacity-60"
+          >
+            {chatShopLoading ? <Loader2 size={12} className="animate-spin" /> : <MessageCircle size={12} />}
+            Chat với shop
+          </button>
           <Link href={`/shop/${shop.id}`} className="flex items-center gap-1 text-xs bg-white text-gray-700 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">
             <Store size={12} /> Xem Shop
           </Link>
@@ -73,13 +97,15 @@ const ShopInfoCard = ({ shop }: { shop: any }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // --- MAIN COMPONENT ---
 // Đã thêm allProducts vào props
 export default function ProductClient({ product, allProducts }: { product: any, allProducts: any[] }) {
   const [quantity, setQuantity] = useState(1);
   const [showNegotiationDialog, setShowNegotiationDialog] = useState(false);
+  const [showChatPanel, setShowChatPanel] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const addToCart = useCartStore((state) => state.addToCart);
   const router = useRouter();
@@ -231,20 +257,26 @@ export default function ProductClient({ product, allProducts }: { product: any, 
             </button>
           </div>
 
-          {/* Nút Thương lượng giá — chỉ hiện khi BE bật min_negotiation_qty */}
-          {product.min_negotiation_qty > 0 && (
+          {/* Nút thương lượng + Chat ngay */}
+          <div className="flex gap-3 mt-2">
             <button
               onClick={() => setShowNegotiationDialog(true)}
-              className="w-full mt-2 flex items-center justify-center gap-2 border-2 border-green-600 text-green-700 py-3 rounded-md font-bold hover:bg-green-50 transition"
+              className="flex-1 flex items-center justify-center gap-2 border-2 border-orange-500 text-orange-600 py-3 rounded-md font-bold hover:bg-orange-50 transition"
             >
-              <Handshake size={20} /> Thương lượng giá
+              <Handshake size={18} /> Thương lượng giá
             </button>
-          )}
+            <button
+              onClick={() => setShowChatPanel(true)}
+              className="flex-1 flex items-center justify-center gap-2 border-2 border-green-500 text-green-700 py-3 rounded-md font-bold hover:bg-green-50 transition"
+            >
+              <MessageCircle size={18} /> Chat ngay
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 2. THÔNG TIN SHOP */}
-      <ShopInfoCard shop={product.shop} />
+      <ShopInfoCard shop={product.shop} product={product} />
 
       {/* 3. CHI TIẾT SẢN PHẨM */}
       <div className="bg-white p-6 rounded-xl shadow-sm">
@@ -388,24 +420,47 @@ export default function ProductClient({ product, allProducts }: { product: any, 
 
       <ChatWidget />
 
+      {/* Chat ngay panel */}
+      {showChatPanel && product.shop && (
+        <ChatPopoverWindow
+          product={{
+            id:    product.id,
+            name:  product.name,
+            price: Number(product.price),
+            unit:  product.unit || 'kg',
+            image: product.images?.[0] || '',
+          }}
+          shop={{
+            id:         product.shop.id,
+            store_name: product.shop.store_name || product.shop.name || '',
+            avatar_url: product.shop.avatar_url || product.shop.avatar || '',
+          }}
+          onClose={() => setShowChatPanel(false)}
+        />
+      )}
+
       {/* Dialog thương lượng giá */}
-      {showNegotiationDialog && product.min_negotiation_qty > 0 && (
+      {showNegotiationDialog && (
         <NegotiationDialog
           product={{
             id:                  product.id,
             name:                product.name,
             unit:                product.unit || 'kg',
-            min_negotiation_qty: product.min_negotiation_qty,
+            min_negotiation_qty: product.min_negotiation_qty || 1,
+            currentPrice:        Number(product.price) || undefined,
           }}
-          onConfirm={(qty) => {
+          onConfirm={(qty, proposedPrice) => {
             setShowNegotiationDialog(false);
-            const sellerId    = product.seller_id || product.shop?.id || '';
-            const productName = encodeURIComponent(product.name);
-            const unit        = encodeURIComponent(product.unit || 'kg');
+            const sellerId = product.seller_id || product.shop?.id || '';
             router.push(
               `/chat?sellerId=${sellerId}&negotiate=1` +
-              `&productId=${product.id}&qty=${qty}` +
-              `&productName=${productName}&unit=${unit}`
+              `&productId=${product.id}` +
+              `&qty=${qty}` +
+              `&proposedPrice=${proposedPrice}` +
+              `&productName=${encodeURIComponent(product.name)}` +
+              `&productPrice=${encodeURIComponent(product.price)}` +
+              `&productImg=${encodeURIComponent(product.images?.[0] || '')}` +
+              `&productUnit=${encodeURIComponent(product.unit || 'kg')}`
             );
           }}
           onClose={() => setShowNegotiationDialog(false)}

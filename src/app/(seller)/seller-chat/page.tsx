@@ -7,12 +7,14 @@ import { io, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
 import {
   MessageCircle, Send, Search, ChevronLeft,
-  Loader2, ClipboardList, XCircle, RotateCcw, Bot,
+  Loader2, ClipboardList, XCircle, RotateCcw, Bot, Handshake, ExternalLink, CheckCircle2
 } from 'lucide-react';
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
 import { SellerQuoteForm, SellerProductOption } from '@/components/chat/SellerQuoteForm';
-import { Message, Conversation, QuoteData, SendQuotePayload } from '@/types/chat';
+import { Message, Conversation, QuoteData, SendQuotePayload, extractQuote, extractNegotiationMsg } from '@/types/chat';
 import { formatCurrency } from '@/utils/vi';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const getPartnerName = (conv: Conversation) =>
@@ -48,6 +50,8 @@ export default function SellerChatPage() {
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
+  const activeConvIdRef = useRef<string | null>(null);
+  const router          = useRouter();
 
   // ── Load seller products (for quote form) ────────────────────────────────
   useEffect(() => {
@@ -84,6 +88,7 @@ export default function SellerChatPage() {
   const selectConversation = useCallback(async (conv: Conversation) => {
     setActiveConv(conv);
     setMobileView('chat');
+    activeConvIdRef.current = conv.id;
     socketRef.current?.emit('joinRoom', { conversationId: conv.id });
     await loadMessages(conv.id);
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -96,17 +101,29 @@ export default function SellerChatPage() {
     const socket = io('http://localhost:3001/chat', {
       auth: { token: `Bearer ${token}` }, transports: ['websocket'],
     });
-    socket.on('connect',    () => console.log('[SellerChat] connected'));
+    socket.on('connect',    () => {
+      console.log('[SellerChat] connected');
+      if (activeConvIdRef.current) {
+        socket.emit('joinRoom', { conversationId: activeConvIdRef.current });
+      }
+    });
     socket.on('disconnect', () => console.log('[SellerChat] disconnected'));
 
     socket.on('newMessage', (msg: Message) => {
-      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+      const normalized: Message = {
+        ...msg,
+        message_content: (msg as any).message_content ?? (msg as any).content ?? '',
+        message_type:    (msg as any).message_type ?? 'TEXT',
+      };
+      setMessages(prev => prev.find(m => m.id === normalized.id) ? prev : [...prev, normalized]);
     });
-    socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: string }) => {
+    socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: QuoteData['status'] }) => {
       setMessages(prev =>
         prev.map(m => {
-          if (m.id !== messageId || !m.quote) return m;
-          return { ...m, quote: { ...m.quote, status: status as QuoteData['status'] } };
+          if (m.id !== messageId) return m;
+          if (m.quote) return { ...m, quote: { ...m.quote, status } };
+          if (m.quote_status !== undefined) return { ...m, quote_status: status };
+          return m;
         })
       );
     });
@@ -158,7 +175,8 @@ export default function SellerChatPage() {
     getPartnerName(c).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isNegotiationConv = activeConv?.conversation_type === 'NEGOTIATION';
+  const negotiationMsg    = extractNegotiationMsg(messages);
+  const isNegotiationConv = !!negotiationMsg;
   const isCancelled       = activeConv ? negotiationCancelledFor.has(activeConv.id) : false;
 
   // ════════════════════════════════════════════════════════════════════════
@@ -221,7 +239,7 @@ export default function SellerChatPage() {
             const name     = getPartnerName(conv);
             const isActive = activeConv?.id === conv.id;
             const lastMsg  = conv.lastMessage;
-            const isNeg    = conv.conversation_type === 'NEGOTIATION';
+            const isNeg    = false; // negotiation derived per-message
             return (
               <div
                 key={conv.id}
@@ -230,24 +248,21 @@ export default function SellerChatPage() {
                   isActive ? 'bg-green-50 border-r-4 border-r-green-500' : ''
                 }`}
               >
-                <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-lg flex-shrink-0 overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-lg flex-shrink-0 overflow-hidden relative">
                   {conv.partner?.avatar
                     ? <img src={`http://localhost:3001${conv.partner.avatar}`} alt="" className="w-full h-full object-cover" />
                     : name.charAt(0).toUpperCase()}
+                  {isNeg && (
+                    <span className="absolute -bottom-0.5 -right-0.5 bg-orange-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">🤝</span>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-0.5">
                     <h4 className="font-bold text-sm text-gray-900 truncate">{name}</h4>
                     {lastMsg && <span className="text-xs text-gray-400 whitespace-nowrap">{formatTime(lastMsg.created_at)}</span>}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {isNeg && (
-                      <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold flex-shrink-0">
-                        Đàm phán
-                      </span>
-                    )}
-                    {lastMsg && <p className="text-xs text-gray-400 truncate">{lastMsg.content}</p>}
-                  </div>
+
+                  {lastMsg && <p className="text-xs text-gray-400 truncate mt-0.5">{lastMsg.content}</p>}
                 </div>
               </div>
             );
@@ -302,7 +317,7 @@ export default function SellerChatPage() {
                       onClick={() => setShowQuoteForm(true)}
                       className="flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg transition shadow-sm"
                     >
-                      <ClipboardList size={13} /> Gửsi báo giá
+                    <ClipboardList size={13} /> Gửi báo giá
                     </button>
                     <button
                       onClick={handleCancelNegotiation}
@@ -315,11 +330,30 @@ export default function SellerChatPage() {
               </div>
             </div>
 
-            {/* Negotiation banner */}
-            {isNegotiationConv && activeConv.product && (
-              <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2 text-xs text-orange-700 flex-shrink-0">
-                <ClipboardList size={13} />
-                <span>Đàm phán: <strong>{activeConv.product.name}</strong></span>
+            {/* Negotiation banner - shows buyer's proposed terms */}
+            {isNegotiationConv && negotiationMsg?.context_product && (
+              <div className="px-4 py-3 bg-orange-50 border-b border-orange-200 flex-shrink-0">
+                <div className="flex items-center gap-2 text-xs text-orange-700 font-medium mb-1">
+                  <ClipboardList size={13} />
+                  <span>Đàm phán: <strong>{negotiationMsg.context_product.name}</strong></span>
+                </div>
+                {(negotiationMsg.proposed_quantity || negotiationMsg.proposed_price) && (
+                  <div className="flex items-center gap-4 text-xs bg-white border border-orange-100 rounded-lg px-3 py-2 mt-1">
+                    <span className="text-gray-500">Khách đề xuất:</span>
+                    {negotiationMsg.proposed_quantity && (
+                      <span className="font-bold text-gray-800">{negotiationMsg.proposed_quantity} {negotiationMsg.context_product.unit || 'kg'}</span>
+                    )}
+                    {negotiationMsg.proposed_price && (
+                      <>
+                        <span className="text-gray-300">×</span>
+                        <span className="font-bold text-orange-600">{formatCurrency(negotiationMsg.proposed_price)}/{negotiationMsg.context_product.unit || 'kg'}</span>
+                        {negotiationMsg.proposed_quantity && (
+                          <span className="ml-auto font-black text-orange-700">=&nbsp;{formatCurrency(negotiationMsg.proposed_price * negotiationMsg.proposed_quantity)}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -338,7 +372,7 @@ export default function SellerChatPage() {
               )}
 
               {messages.map((msg, idx) => {
-                const isMe     = msg.sender_id === user?.id;
+                const isMe     = msg.sender?.id === user?.id;
                 const prevMsg  = messages[idx - 1];
                 const showTime = !prevMsg ||
                   (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) > 5 * 60 * 1000;
@@ -355,12 +389,111 @@ export default function SellerChatPage() {
 
                 // SYSTEM
                 if (msg.message_type === 'SYSTEM') {
+                  const cp = msg.context_product;
+                  // SYSTEM + context_product + proposed → Thẻ thương lượng (seller view: 2 action buttons)
+                  if (cp && msg.proposed_quantity) {
+                    return (
+                      <div key={msg.id || idx}>
+                        {TimeDiv}
+                        <div className="flex justify-center my-3">
+                          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 w-full max-w-[360px] shadow-sm">
+                            <p className="text-xs font-bold text-orange-700 mb-2 flex items-center gap-1.5">
+                              <Handshake size={13}/> Khách hàng muốn thương lượng giá về:
+                            </p>
+                            {/* Product badge */}
+                            <div className="flex items-center gap-2 mb-3 overflow-x-auto">
+                              <div className="flex items-center gap-2 min-w-max">
+                                {cp.image && (
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0">
+                                    <img src={`http://localhost:3001${cp.image.startsWith('/') ? '' : '/'}${cp.image}`} alt={cp.name} className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs font-bold text-gray-900">{cp.name}</p>
+                                  <p className="text-xs text-green-600">{formatCurrency(cp.reference_price ?? cp.price ?? 0)}/{cp.unit || 'kg'}</p>
+                                </div>
+                                <Link href={`/products/${cp.id}`} className="ml-1 text-gray-400 hover:text-green-600">
+                                  <ExternalLink size={11}/>
+                                </Link>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-xl border border-orange-100 px-3 py-2 text-xs space-y-1 mb-3">
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">Số lượng muốn mua:</span>
+                                <span className="font-bold">{msg.proposed_quantity} {cp.unit || 'kg'}</span>
+                              </div>
+                              {msg.proposed_price && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Giá khách đề xuất:</span>
+                                  <span className="font-bold text-orange-600">{formatCurrency(msg.proposed_price)}/{cp.unit || 'kg'}</span>
+                                </div>
+                              )}
+                              {msg.proposed_price && (
+                                <div className="flex justify-between border-t border-orange-100 pt-1">
+                                  <span className="text-gray-600 font-medium">Tổng:</span>
+                                  <span className="font-black text-orange-700">{formatCurrency(msg.proposed_price * msg.proposed_quantity)}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  if (!activeConv || !socketRef.current) return;
+                                  // Chấp nhận giá khách đề xuất: gửi quote với đúng giá đó
+                                  socketRef.current.emit('sendNegotiationQuote', {
+                                    conversationId: activeConv.id,
+                                    productId:   cp.id,
+                                    productName: cp.name,
+                                    quantity:    msg.proposed_quantity!,
+                                    price:       msg.proposed_price ?? (cp.reference_price ?? cp.price ?? 0),
+                                    unit:        cp.unit || 'kg',
+                                  });
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-xs font-bold transition"
+                              >
+                                <CheckCircle2 size={13}/> Chấp nhận &amp; Gửi đơn
+                              </button>
+                              <button
+                                onClick={handleCancelNegotiation}
+                                className="flex items-center justify-center gap-1 text-red-600 border border-red-200 px-3 py-2 rounded-xl text-xs font-bold hover:bg-red-50 transition"
+                              >
+                                <XCircle size={13}/> Từ chối
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  // SYSTEM + context_product (chút → badge sản phẩm)
+                  if (cp) {
+                    return (
+                      <div key={msg.id || idx}>
+                        {TimeDiv}
+                        <div className="flex justify-center my-2">
+                          <div className="border border-gray-200 bg-white rounded-full shadow-sm overflow-x-auto max-w-[90%]">
+                            <Link href={`/products/${cp.id}`} className="flex items-center gap-2 px-3 py-1.5 min-w-max hover:bg-gray-50 transition">
+                              {cp.image && (
+                                <div className="w-6 h-6 rounded overflow-hidden flex-shrink-0">
+                                  <img src={`http://localhost:3001${cp.image.startsWith('/') ? '' : '/'}${cp.image}`} alt={cp.name} className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <span className="text-xs text-gray-500">Đang hỏi về:</span>
+                              <span className="text-xs font-bold text-gray-900">{cp.name}</span>
+                              <ExternalLink size={11} className="text-gray-300"/>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  // Plain SYSTEM
                   return (
                     <div key={msg.id || idx}>
                       {TimeDiv}
                       <div className="flex justify-center my-2">
                         <div className="bg-green-50 border border-green-100 text-green-700 text-xs font-medium px-4 py-1.5 rounded-full max-w-[85%] text-center">
-                          {msg.content}
+                          {msg.message_content}
                         </div>
                       </div>
                     </div>
@@ -368,7 +501,8 @@ export default function SellerChatPage() {
                 }
 
                 // NEGOTIATION_QUOTE card (seller sees it with no action buttons)
-                if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.quote) {
+                const quote = extractQuote(msg);
+                if (msg.message_type === 'NEGOTIATION_QUOTE' && quote) {
                   return (
                     <div key={msg.id || idx}>
                       {TimeDiv}
@@ -379,7 +513,7 @@ export default function SellerChatPage() {
                           </div>
                         )}
                         <NegotiationQuoteCard
-                          quote={msg.quote}
+                          quote={quote}
                           isBuyer={false}  // seller view → no accept/reject buttons
                         />
                       </div>
@@ -402,7 +536,7 @@ export default function SellerChatPage() {
                           ? 'bg-green-600 text-white rounded-br-sm'
                           : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100'
                       }`}>
-                        {msg.content}
+                        {msg.message_content}
                       </div>
                     </div>
                   </div>
@@ -417,7 +551,7 @@ export default function SellerChatPage() {
                 <button
                   onClick={() => setShowQuoteForm(true)}
                   className="p-2.5 text-green-600 hover:bg-green-50 border border-green-200 rounded-xl transition flex-shrink-0"
-                  title="Gửsi báo giá"
+                  title="Gửi báo giá"
                 >
                   <ClipboardList size={18} />
                 </button>
@@ -448,12 +582,12 @@ export default function SellerChatPage() {
         <SellerQuoteForm
           products={sellerProducts}
           defaultProduct={
-            activeConv?.product
+            negotiationMsg?.context_product
               ? {
-                  id:       activeConv.product.id,
-                  name:     activeConv.product.name,
-                  unit:     activeConv.product.unit || 'kg',
-                  quantity: undefined,
+                  id:       negotiationMsg.context_product.id,
+                  name:     negotiationMsg.context_product.name,
+                  unit:     negotiationMsg.context_product.unit || 'kg',
+                  quantity: negotiationMsg.proposed_quantity ?? undefined,
                 }
               : undefined
           }

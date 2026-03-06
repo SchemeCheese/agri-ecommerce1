@@ -8,11 +8,20 @@ import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container';
 import {
   MessageCircle, Send, Search, ChevronLeft,
-  Loader2, Store, Handshake, XCircle, RotateCcw,
+  Loader2, Store, Handshake, XCircle, RotateCcw, ShoppingBag, ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
+import { formatCurrency } from '@/utils/vi';
+
+const BACKEND_URL = 'http://localhost:3001';
+const fixImg = (url: string) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+};
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
-import { Message, Conversation, QuoteData, CheckoutData } from '@/types/chat';
+import { Message, Conversation, QuoteData, CheckoutData, extractQuote, extractNegotiationMsg } from '@/types/chat';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const getPartnerName = (conv: Conversation) =>
@@ -34,11 +43,17 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
 
   // URL params
-  const sellerIdParam   = searchParams?.get('sellerId');
-  const convIdParam     = searchParams?.get('conversationId');
-  const isNegotiate     = searchParams?.get('negotiate') === '1';
-  const productIdParam  = searchParams?.get('productId');
-  const qtyParam        = Number(searchParams?.get('qty') || 0);
+  const sellerIdParam    = searchParams?.get('sellerId');
+  const convIdParam      = searchParams?.get('conversationId');
+  const isNegotiate      = searchParams?.get('negotiate') === '1';
+  const productIdParam   = searchParams?.get('productId');
+  const qtyParam         = Number(searchParams?.get('qty') || 0);
+  const proposedPriceParam = Number(searchParams?.get('proposedPrice') || 0);
+  // Product context passed from product detail page
+  const refProductName   = searchParams?.get('productName');
+  const refProductImg    = searchParams?.get('productImg');
+  const refProductPrice  = searchParams?.get('productPrice');
+  const refProductUnit   = searchParams?.get('productUnit');
 
   const [conversations,  setConversations]  = useState<Conversation[]>([]);
   const [loadingConvs,   setLoadingConvs]   = useState(false);
@@ -55,6 +70,8 @@ export default function ChatPage() {
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
+  // Track active conversation id for socket re-join on reconnect
+  const activeConvIdRef = useRef<string | null>(null);
 
 
   // ── Load conversations ───────────────────────────────────────────────────
@@ -86,6 +103,7 @@ export default function ChatPage() {
   const selectConversation = useCallback(async (conv: Conversation) => {
     setActiveConv(conv);
     setMobileView('chat');
+    activeConvIdRef.current = conv.id;
     socketRef.current?.emit('joinRoom', { conversationId: conv.id });
     await loadMessages(conv.id);
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -97,10 +115,11 @@ export default function ChatPage() {
     negotiationStartedRef.current = true;
     socketRef.current?.emit('startNegotiation', {
       conversationId,
-      productId: productIdParam,
-      quantity:  qtyParam,
+      productId:     productIdParam,
+      quantity:      qtyParam,
+      proposedPrice: proposedPriceParam || undefined,
     });
-  }, [productIdParam, qtyParam]);
+  }, [productIdParam, qtyParam, proposedPriceParam]);
 
   // ── Cancel negotiation ──────────────────────────────────────
   const handleCancelNegotiation = () => {
@@ -127,21 +146,37 @@ export default function ChatPage() {
       transports: ['websocket'],
     });
 
-    socket.on('connect', () => console.log('[Chat] Socket connected'));
+    socket.on('connect', () => {
+      console.log('[Chat] Socket connected');
+      // Re-join room on reconnect if there's an active conversation
+      if (activeConvIdRef.current) {
+        socket.emit('joinRoom', { conversationId: activeConvIdRef.current });
+      }
+    });
     socket.on('disconnect', () => console.log('[Chat] Socket disconnected'));
 
     socket.on('newMessage', (msg: Message) => {
+      // Normalize: some older emits may use `content` instead of `message_content`
+      const normalized: Message = {
+        ...msg,
+        message_content: (msg as any).message_content ?? (msg as any).content ?? '',
+        message_type:    (msg as any).message_type ?? 'TEXT',
+      };
       setMessages(prev =>
-        prev.find(m => m.id === msg.id) ? prev : [...prev, msg]
+        prev.find(m => m.id === normalized.id) ? prev : [...prev, normalized]
       );
     });
 
-    // Quote status updated
-    socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: string }) => {
+    // Quote status updated (works for both nested + flat quote messages)
+    socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: QuoteData['status'] }) => {
       setMessages(prev =>
         prev.map(m => {
-          if (m.id !== messageId || !m.quote) return m;
-          return { ...m, quote: { ...m.quote, status: status as QuoteData['status'] } };
+          if (m.id !== messageId) return m;
+          // Update nested quote
+          if (m.quote) return { ...m, quote: { ...m.quote, status } };
+          // Update flat quote fields
+          if (m.quote_status !== undefined) return { ...m, quote_status: status };
+          return m;
         })
       );
     });
@@ -250,7 +285,8 @@ export default function ChatPage() {
     getPartnerName(c).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isNegotiationConv = activeConv?.conversation_type === 'NEGOTIATION';
+  const negotiationMsg    = extractNegotiationMsg(messages);
+  const isNegotiationConv = !!negotiationMsg;
   const isCancelled       = activeConv ? negotiationCancelledFor.has(activeConv.id) : false;
 
   // ════════════════════════════════════════════════════════════════════════
@@ -310,7 +346,7 @@ export default function ChatPage() {
                   const isActive = activeConv?.id === conv.id;
                   const lastMsg  = conv.lastMessage;
                   const isMyMsg  = lastMsg?.sender_id === user?.id;
-                  const isNeg    = conv.conversation_type === 'NEGOTIATION';
+                  const isNeg    = false; // negotiation badge derived per-message, not per-conversation
                   return (
                     <button
                       key={conv.id}
@@ -324,6 +360,10 @@ export default function ChatPage() {
                           ? <img src={`http://localhost:3001${conv.partner.avatar}`} alt="" className="w-full h-full object-cover"/>
                           : name.charAt(0).toUpperCase()
                         }
+                        {/* Badge icon overlay for negotiation */}
+                        {isNeg && (
+                          <span className="absolute -bottom-0.5 -right-0.5 bg-orange-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">🤝</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between gap-1">
@@ -332,18 +372,12 @@ export default function ChatPage() {
                             <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTime(lastMsg.created_at)}</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {isNeg && (
-                            <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold flex-shrink-0">
-                              Đàm phán
-                            </span>
-                          )}
-                          {lastMsg && (
-                            <p className="text-xs text-gray-400 truncate">
-                              {isMyMsg ? 'Bạn: ' : ''}{lastMsg.content}
-                            </p>
-                          )}
-                        </div>
+
+                        {lastMsg && (
+                          <p className="text-xs text-gray-400 truncate mt-0.5">
+                            {isMyMsg ? 'Bạn: ' : ''}{lastMsg.content}
+                          </p>
+                        )}
                       </div>
                     </button>
                   );
@@ -416,10 +450,10 @@ export default function ChatPage() {
                   </div>
 
                   {/* Negotiation info banner */}
-                  {isNegotiationConv && activeConv.product && (
+                  {isNegotiationConv && negotiationMsg?.context_product && (
                     <div className="px-5 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2 text-xs text-orange-700">
                       <Handshake size={13}/>
-                      <span>Đàm phán giá: <strong>{activeConv.product.name}</strong></span>
+                      <span>Đàm phán giá: <strong>{negotiationMsg.context_product.name}</strong></span>
                     </div>
                   )}
 
@@ -429,6 +463,51 @@ export default function ChatPage() {
                       <RotateCcw size={13}/> Đàm phán đã kết thúc. Bạn có thể tiếp tục nhắn tin bình thường.
                     </div>
                   )}
+
+                  {/* Product reference card — hiển thị khi chat có kèm sản phẩm (non-negotiation) */}
+                  {(() => {
+                    // Ưu tiên dataURL params; nếu không có thì dùng context_product từ negotiation message
+                    const convProduct  = negotiationMsg?.context_product ?? null;
+                    const displayName  = refProductName ? decodeURIComponent(refProductName) : convProduct?.name;
+                    const displayImg   = refProductImg  ? fixImg(decodeURIComponent(refProductImg)) : (convProduct?.image ? fixImg(convProduct.image) : null);
+                    const displayPrice = refProductPrice ? Number(refProductPrice) : (convProduct?.reference_price ?? convProduct?.price ?? null);
+                    const displayUnit  = refProductUnit  ? decodeURIComponent(refProductUnit) : convProduct?.unit ?? null;
+                    const displayId    = productIdParam ?? convProduct?.id ?? null;
+
+                    if (isNegotiationConv || !displayName) return null;
+
+                    return (
+                      <div className="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shadow-sm">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 bg-gray-50">
+                          {displayImg ? (
+                            <img src={displayImg} alt={displayName} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ShoppingBag size={20} className="text-gray-300"/>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-gray-400 font-medium mb-0.5 uppercase tracking-wide">Đang hỏi về sản phẩm</p>
+                          <p className="text-sm font-bold text-gray-900 truncate">{displayName}</p>
+                          {displayPrice != null && (
+                            <p className="text-sm text-green-600 font-bold mt-0.5">
+                              {formatCurrency(displayPrice)}
+                              {displayUnit && <span className="text-xs text-gray-400 font-normal ml-1">/ {displayUnit}</span>}
+                            </p>
+                          )}
+                        </div>
+                        {displayId && (
+                          <Link
+                            href={`/products/${displayId}`}
+                            className="text-xs text-green-600 hover:text-green-700 border border-green-200 hover:border-green-400 px-2.5 py-1.5 rounded-lg font-semibold flex-shrink-0 transition-all"
+                          >
+                            Xem SP
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/50">
@@ -444,7 +523,7 @@ export default function ChatPage() {
                     )}
 
                     {messages.map((msg, idx) => {
-                      const isMe    = msg.sender_id === user?.id;
+                      const isMe    = msg.sender?.id === user?.id;
                       const prevMsg = messages[idx - 1];
                       const showTime = !prevMsg ||
                         (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) > 5 * 60 * 1000;
@@ -460,12 +539,87 @@ export default function ChatPage() {
 
                       // SYSTEM message
                       if (msg.message_type === 'SYSTEM') {
+                        const cp = msg.context_product;
+                        // SYSTEM + context_product + proposed_* → Nương thương lượng request card (buyer view)
+                        if (cp && msg.proposed_quantity) {
+                          return (
+                            <div key={msg.id || idx}>
+                              {TimeDiv}
+                              <div className="flex justify-center my-3">
+                                <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 w-full max-w-[340px] shadow-sm">
+                                  <p className="text-xs text-orange-600 font-bold mb-2 flex items-center gap-1.5">
+                                    <Handshake size={13}/> Yêu cầu thương lượng đã gửi
+                                  </p>
+                                  {/* Product badge */}
+                                  <div className="flex items-center gap-2 mb-3 overflow-x-auto">
+                                    <div className="flex items-center gap-2 min-w-max">
+                                      {cp.image && (
+                                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0">
+                                          <img src={fixImg(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
+                                        </div>
+                                      )}
+                                      <div>
+                                        <p className="text-xs font-bold text-gray-900">{cp.name}</p>
+                                        <p className="text-xs text-green-600 font-semibold">{formatCurrency(cp.reference_price ?? cp.price ?? 0)}/{cp.unit || 'kg'}</p>
+                                      </div>
+                                      <Link href={`/products/${cp.id}`} className="ml-2 text-green-600 hover:text-green-700">
+                                        <ExternalLink size={12}/>
+                                      </Link>
+                                    </div>
+                                  </div>
+                                  <div className="bg-white rounded-xl border border-orange-100 px-3 py-2 text-xs space-y-1">
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-500">Số lượng muốn mua:</span>
+                                      <span className="font-bold">{msg.proposed_quantity} {cp.unit || 'kg'}</span>
+                                    </div>
+                                    {msg.proposed_price && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Giá đề xuất:</span>
+                                        <span className="font-bold text-orange-600">{formatCurrency(msg.proposed_price)}/{cp.unit || 'kg'}</span>
+                                      </div>
+                                    )}
+                                    {msg.proposed_price && (
+                                      <div className="flex justify-between border-t border-orange-100 pt-1">
+                                        <span className="text-gray-600 font-medium">Tổng dự kiến:</span>
+                                        <span className="font-black text-orange-700">{formatCurrency(msg.proposed_price * msg.proposed_quantity)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        // SYSTEM + context_product (no proposed) → Badge sản phẩm khối hỏi
+                        if (cp) {
+                          return (
+                            <div key={msg.id || idx}>
+                              {TimeDiv}
+                              <div className="flex justify-center my-2">
+                                <div className="border border-gray-200 bg-white rounded-full shadow-sm overflow-x-auto max-w-[90%]">
+                                  <Link href={`/products/${cp.id}`} className="flex items-center gap-2 px-3 py-1.5 min-w-max hover:bg-gray-50 transition">
+                                    {cp.image && (
+                                      <div className="w-6 h-6 rounded overflow-hidden flex-shrink-0">
+                                        <img src={fixImg(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
+                                      </div>
+                                    )}
+                                    <span className="text-xs text-gray-500">Đang hỏi về:</span>
+                                    <span className="text-xs font-bold text-gray-900">{cp.name}</span>
+                                    <span className="text-xs text-green-600 font-semibold">{formatCurrency(cp.reference_price ?? cp.price ?? 0)}</span>
+                                    <ExternalLink size={11} className="text-gray-300"/>
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        // Plain SYSTEM message
                         return (
                           <div key={msg.id || idx}>
                             {TimeDiv}
                             <div className="flex justify-center my-2">
                               <div className="bg-green-50 border border-green-100 text-green-700 text-xs font-medium px-4 py-1.5 rounded-full max-w-[85%] text-center">
-                                {msg.content}
+                                {msg.message_content}
                               </div>
                             </div>
                           </div>
@@ -473,7 +627,8 @@ export default function ChatPage() {
                       }
 
                       // NEGOTIATION_QUOTE card
-                      if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.quote) {
+                      const quote = extractQuote(msg);
+                      if (msg.message_type === 'NEGOTIATION_QUOTE' && quote) {
                         return (
                           <div key={msg.id || idx}>
                             {TimeDiv}
@@ -484,10 +639,10 @@ export default function ChatPage() {
                                 </div>
                               )}
                               <NegotiationQuoteCard
-                                quote={msg.quote}
+                                quote={quote}
                                 isBuyer={!isMe}
-                                onAccept={() => respondToQuote(msg.quote!.messageId, 'ACCEPTED')}
-                                onReject={() => respondToQuote(msg.quote!.messageId, 'REJECTED')}
+                                onAccept={() => respondToQuote(quote.messageId, 'ACCEPTED')}
+                                onReject={() => respondToQuote(quote.messageId, 'REJECTED')}
                               />
                             </div>
                           </div>
@@ -509,7 +664,7 @@ export default function ChatPage() {
                                 ? 'bg-green-600 text-white rounded-br-sm shadow-sm'
                                 : 'bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100'
                             }`}>
-                              {msg.content}
+                              {msg.message_content}
                             </div>
                           </div>
                         </div>
