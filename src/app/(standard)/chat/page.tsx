@@ -1,70 +1,61 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { io, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container';
 import {
   MessageCircle, Send, Search, ChevronLeft,
-  Loader2, Store,
+  Loader2, Store, Handshake, XCircle, RotateCcw,
 } from 'lucide-react';
 import Link from 'next/link';
+import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
+import { Message, Conversation, QuoteData, CheckoutData } from '@/types/chat';
 
-interface Conversation {
-  id: string;
-  partner: {
-    id: string;
-    full_name: string;
-    avatar?: string;
-    profile?: { store_name?: string };
-  };
-  lastMessage?: {
-    content: string;
-    created_at: string;
-    sender_id: string;
-  };
-}
+// ─── helpers ─────────────────────────────────────────────────────────────────
+const getPartnerName = (conv: Conversation) =>
+  conv.partner?.profile?.store_name || conv.partner?.full_name || 'Người dùng';
 
-interface Message {
-  id: string;
-  sender_id: string;
-  content: string;
-  created_at: string;
-}
+const formatTime = (dateStr: string) => {
+  const d      = new Date(dateStr);
+  const diffM  = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (diffM < 1)    return 'Vừa xong';
+  if (diffM < 60)   return `${diffM} phút`;
+  if (diffM < 1440) return `${Math.floor(diffM / 60)} giờ`;
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+};
 
+// ─────────────────────────────────────────────────────────────────────────────
 export default function ChatPage() {
-  const { user } = useAuth();
+  const router       = useRouter();
+  const { user }     = useAuth();
   const searchParams = useSearchParams();
-  const sellerId = searchParams?.get('sellerId');
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loadingConvs, setLoadingConvs] = useState(false);
-  const [activeConv, setActiveConv] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [inputText, setInputText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+  // URL params
+  const sellerIdParam   = searchParams?.get('sellerId');
+  const convIdParam     = searchParams?.get('conversationId');
+  const isNegotiate     = searchParams?.get('negotiate') === '1';
+  const productIdParam  = searchParams?.get('productId');
+  const qtyParam        = Number(searchParams?.get('qty') || 0);
 
-  const socketRef = useRef<Socket | null>(null);
+  const [conversations,  setConversations]  = useState<Conversation[]>([]);
+  const [loadingConvs,   setLoadingConvs]   = useState(false);
+  const [activeConv,     setActiveConv]     = useState<Conversation | null>(null);
+  const [messages,       setMessages]       = useState<Message[]>([]);
+  const [loadingMsgs,    setLoadingMsgs]    = useState(false);
+  const [inputText,      setInputText]      = useState('');
+  const [sending,        setSending]        = useState(false);
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [mobileView,     setMobileView]     = useState<'list' | 'chat'>('list');
+  const [negotiationCancelledFor, setNegotiationCancelledFor] = useState<Set<string>>(new Set());
+  const negotiationStartedRef = useRef(false);
+
+  const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
 
-  // ── Helper ──────────────────────────────────────────────────────────────
-  const getPartnerName = (conv: Conversation) =>
-    conv.partner?.profile?.store_name || conv.partner?.full_name || 'Người dùng';
-
-  const formatTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const diffMins = Math.floor((Date.now() - d.getTime()) / 60000);
-    if (diffMins < 1) return 'Vừa xong';
-    if (diffMins < 60) return `${diffMins} phút`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)} giờ`;
-    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-  };
 
   // ── Load conversations ───────────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
@@ -99,7 +90,33 @@ export default function ChatPage() {
     await loadMessages(conv.id);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [loadMessages]);
+  // ── Emit startNegotiation (only once per mount) ─────────────────────
+  const emitStartNegotiation = useCallback((conversationId: string) => {
+    if (negotiationStartedRef.current) return;
+    if (!productIdParam || !qtyParam)  return;
+    negotiationStartedRef.current = true;
+    socketRef.current?.emit('startNegotiation', {
+      conversationId,
+      productId: productIdParam,
+      quantity:  qtyParam,
+    });
+  }, [productIdParam, qtyParam]);
 
+  // ── Cancel negotiation ──────────────────────────────────────
+  const handleCancelNegotiation = () => {
+    if (!activeConv) return;
+    socketRef.current?.emit('cancelNegotiation', { conversationId: activeConv.id });
+  };
+
+  // ── Respond to quote ────────────────────────────────────────
+  const respondToQuote = (messageId: string, action: 'ACCEPTED' | 'REJECTED') => {
+    if (!activeConv) return;
+    socketRef.current?.emit('respondToQuote', {
+      messageId,
+      action,
+      conversationId: activeConv.id,
+    });
+  };
   // ── Socket setup ─────────────────────────────────────────────────────────
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -119,11 +136,44 @@ export default function ChatPage() {
       );
     });
 
+    // Quote status updated
+    socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: string }) => {
+      setMessages(prev =>
+        prev.map(m => {
+          if (m.id !== messageId || !m.quote) return m;
+          return { ...m, quote: { ...m.quote, status: status as QuoteData['status'] } };
+        })
+      );
+    });
+
+    // Buyer accepted → redirect to checkout
+    socket.on('negotiationAccepted', ({ checkoutData }: { checkoutData: CheckoutData }) => {
+      const { productId, productName, quantity, negotiatedPrice, unit, sellerId: sId } = checkoutData;
+      router.push(
+        `/checkout?ng=1` +
+        `&id=${encodeURIComponent(productId)}` +
+        `&name=${encodeURIComponent(productName)}` +
+        `&qty=${quantity}` +
+        `&price=${encodeURIComponent(negotiatedPrice)}` +
+        `&unit=${encodeURIComponent(unit)}` +
+        `&sellerId=${encodeURIComponent(sId)}`
+      );
+    });
+
+    // Negotiation cancelled
+    socket.on('negotiationCancelled', ({ conversationId }: { conversationId: string }) => {
+      setNegotiationCancelledFor(prev => new Set([...prev, conversationId]));
+    });
+
     socket.on('conversationReady', ({ conversationId }: { conversationId: string }) => {
       socket.emit('joinRoom', { conversationId });
       loadConversations().then(convs => {
         const conv = convs.find(c => c.id === conversationId);
-        if (conv) selectConversation(conv);
+        if (conv) {
+          selectConversation(conv).then(() => {
+            if (isNegotiate) emitStartNegotiation(conversationId);
+          });
+        }
       });
     });
 
@@ -131,29 +181,46 @@ export default function ChatPage() {
     return () => { socket.disconnect(); };
   }, [user, loadConversations, selectConversation]);
 
-  // ── Init: load convs + handle sellerId param ─────────────────────────────
+  // ── Init: load convs + handle URL params ─────────────────────────────────
   useEffect(() => {
     loadConversations().then(convs => {
-      if (sellerId) {
-        const existing = convs.find(c => c.partner?.id === sellerId);
-        if (existing) {
-          selectConversation(existing);
-        } else if (socketRef.current?.connected) {
-          socketRef.current.emit('startConversation', { partnerId: sellerId });
-        } else {
-          // Wait for socket to connect then start
-          const tryStart = setInterval(() => {
-            if (socketRef.current?.connected) {
-              socketRef.current.emit('startConversation', { partnerId: sellerId });
-              clearInterval(tryStart);
+      if (convIdParam) {
+        const conv = convs.find(c => c.id === convIdParam);
+        if (conv) selectConversation(conv);
+        return;
+      }
+      if (sellerIdParam) {
+        const existing = convs.find(c => c.partner?.id === sellerIdParam);
+        const openConv = (conv: Conversation) => {
+          selectConversation(conv).then(() => {
+            if (isNegotiate) emitStartNegotiation(conv.id);
+          });
+        };
+        if (existing) { openConv(existing); return; }
+        api
+          .post('/chat/initiate', { partnerId: sellerIdParam })
+          .then(res => {
+            socketRef.current?.emit('joinRoom', { conversationId: res.data.conversationId });
+            return loadConversations().then(fresh => {
+              const c = fresh.find(f => f.id === res.data.conversationId)
+                     || fresh.find(f => f.partner?.id === sellerIdParam);
+              if (c) openConv(c);
+            });
+          })
+          .catch(() => {
+            const tryStart = () =>
+              socketRef.current?.emit('startConversation', { partnerId: sellerIdParam });
+            if (socketRef.current?.connected) tryStart();
+            else {
+              const iv = setInterval(() => {
+                if (socketRef.current?.connected) { tryStart(); clearInterval(iv); }
+              }, 300);
             }
-          }, 300);
-          return () => clearInterval(tryStart);
-        }
+          });
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sellerId]);
+  }, [sellerIdParam, convIdParam]);
 
   // ── Scroll to bottom on new messages ─────────────────────────────────────
   useEffect(() => {
@@ -161,16 +228,16 @@ export default function ChatPage() {
   }, [messages]);
 
   // ── Send message ─────────────────────────────────────────────────────────
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!inputText.trim() || !activeConv || !socketRef.current) return;
     setSending(true);
     socketRef.current.emit('sendMessage', {
       conversationId: activeConv.id,
-      content: inputText.trim(),
+      content:        inputText.trim(),
     });
     setInputText('');
     setSending(false);
-  };
+  }, [inputText, activeConv]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -182,6 +249,9 @@ export default function ChatPage() {
   const filteredConvs = conversations.filter(c =>
     getPartnerName(c).toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const isNegotiationConv = activeConv?.conversation_type === 'NEGOTIATION';
+  const isCancelled       = activeConv ? negotiationCancelledFor.has(activeConv.id) : false;
 
   // ════════════════════════════════════════════════════════════════════════
   return (
@@ -236,10 +306,11 @@ export default function ChatPage() {
                 )}
 
                 {filteredConvs.map(conv => {
-                  const name = getPartnerName(conv);
+                  const name     = getPartnerName(conv);
                   const isActive = activeConv?.id === conv.id;
-                  const lastMsg = conv.lastMessage;
-                  const isMyMsg = lastMsg?.sender_id === user?.id;
+                  const lastMsg  = conv.lastMessage;
+                  const isMyMsg  = lastMsg?.sender_id === user?.id;
+                  const isNeg    = conv.conversation_type === 'NEGOTIATION';
                   return (
                     <button
                       key={conv.id}
@@ -261,11 +332,18 @@ export default function ChatPage() {
                             <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTime(lastMsg.created_at)}</span>
                           )}
                         </div>
-                        {lastMsg && (
-                          <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {isMyMsg ? 'Bạn: ' : ''}{lastMsg.content}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {isNeg && (
+                            <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold flex-shrink-0">
+                              Đàm phán
+                            </span>
+                          )}
+                          {lastMsg && (
+                            <p className="text-xs text-gray-400 truncate">
+                              {isMyMsg ? 'Bạn: ' : ''}{lastMsg.content}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </button>
                   );
@@ -312,15 +390,45 @@ export default function ChatPage() {
                       <p className="text-xs text-green-600 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 bg-green-500 rounded-full inline-block animate-pulse"/>
                         Đang hoạt động
+                        {isNegotiationConv && (
+                          <span className="ml-2 bg-orange-100 text-orange-600 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                            Đang đàm phán
+                          </span>
+                        )}
                       </p>
                     </div>
-                    <Link
-                      href={`/shop/${activeConv.partner?.id}`}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-green-600 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-all flex-shrink-0"
-                    >
-                      <Store size={13}/> Xem shop
-                    </Link>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {isNegotiationConv && !isCancelled && (
+                        <button
+                          onClick={handleCancelNegotiation}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-2.5 py-1.5 rounded-lg transition-all"
+                        >
+                          <XCircle size={13}/> Hủy đàm phán
+                        </button>
+                      )}
+                      <Link
+                        href={`/shop/${activeConv.partner?.id}`}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-green-600 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-all"
+                      >
+                        <Store size={13}/> Xem shop
+                      </Link>
+                    </div>
                   </div>
+
+                  {/* Negotiation info banner */}
+                  {isNegotiationConv && activeConv.product && (
+                    <div className="px-5 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2 text-xs text-orange-700">
+                      <Handshake size={13}/>
+                      <span>Đàm phán giá: <strong>{activeConv.product.name}</strong></span>
+                    </div>
+                  )}
+
+                  {/* Cancelled banner */}
+                  {isCancelled && (
+                    <div className="px-5 py-2 bg-red-50 border-b border-red-100 flex items-center gap-2 text-xs text-red-600 font-medium">
+                      <RotateCcw size={13}/> Đàm phán đã kết thúc. Bạn có thể tiếp tục nhắn tin bình thường.
+                    </div>
+                  )}
 
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/50">
@@ -336,21 +444,60 @@ export default function ChatPage() {
                     )}
 
                     {messages.map((msg, idx) => {
-                      const isMe = msg.sender_id === user?.id;
+                      const isMe    = msg.sender_id === user?.id;
                       const prevMsg = messages[idx - 1];
                       const showTime = !prevMsg ||
                         (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) > 5 * 60 * 1000;
 
+                      const TimeDiv = showTime ? (
+                        <div className="text-center my-3">
+                          <span className="text-[11px] text-gray-400 bg-white border border-gray-100 px-3 py-1 rounded-full shadow-sm">
+                            {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                            {' · '}{new Date(msg.created_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                          </span>
+                        </div>
+                      ) : null;
+
+                      // SYSTEM message
+                      if (msg.message_type === 'SYSTEM') {
+                        return (
+                          <div key={msg.id || idx}>
+                            {TimeDiv}
+                            <div className="flex justify-center my-2">
+                              <div className="bg-green-50 border border-green-100 text-green-700 text-xs font-medium px-4 py-1.5 rounded-full max-w-[85%] text-center">
+                                {msg.content}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // NEGOTIATION_QUOTE card
+                      if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.quote) {
+                        return (
+                          <div key={msg.id || idx}>
+                            {TimeDiv}
+                            <div className={`flex items-end gap-2 mb-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                              {!isMe && (
+                                <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs flex-shrink-0 border border-gray-100">
+                                  {getPartnerName(activeConv).charAt(0)}
+                                </div>
+                              )}
+                              <NegotiationQuoteCard
+                                quote={msg.quote}
+                                isBuyer={!isMe}
+                                onAccept={() => respondToQuote(msg.quote!.messageId, 'ACCEPTED')}
+                                onReject={() => respondToQuote(msg.quote!.messageId, 'REJECTED')}
+                              />
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // TEXT message
                       return (
                         <div key={msg.id || idx}>
-                          {showTime && (
-                            <div className="text-center my-3">
-                              <span className="text-[11px] text-gray-400 bg-white border border-gray-100 px-3 py-1 rounded-full shadow-sm">
-                                {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                {' · '}{new Date(msg.created_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-                              </span>
-                            </div>
-                          )}
+                          {TimeDiv}
                           <div className={`flex items-end gap-2 mb-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                             {!isMe && (
                               <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs flex-shrink-0 border border-gray-100 mb-0.5">

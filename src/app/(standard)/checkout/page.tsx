@@ -57,28 +57,36 @@ export default function CheckoutPage() {
   }, [user]);
 
   const searchParams = useSearchParams();
-  const isBuyNow = searchParams?.get('bn') === '1';
+  const isBuyNow     = searchParams?.get('bn') === '1';
+  const isNegotiated = searchParams?.get('ng') === '1';
+  const isSingleItem = isBuyNow || isNegotiated;
+
   const buyNowSellerId = decodeURIComponent(searchParams?.get('sellerId') || '');
   const buyNowShopName = decodeURIComponent(searchParams?.get('shopName') || '');
-  const buyNowItem = isBuyNow ? {
-    id: searchParams!.get('id') || '',
-    name: decodeURIComponent(searchParams!.get('name') || ''),
-    price: Number(searchParams!.get('price') || 0),
+
+  const singleItem = isSingleItem ? {
+    id:       searchParams!.get('id') || '',
+    name:     decodeURIComponent(searchParams!.get('name') || ''),
+    price:    Number(searchParams!.get('price') || 0),
     quantity: Number(searchParams!.get('qty') || 1),
-    images: [decodeURIComponent(searchParams!.get('img') || '')],
-    unit: decodeURIComponent(searchParams!.get('unit') || ''),
+    images:   [decodeURIComponent(searchParams!.get('img') || '')],
+    unit:     decodeURIComponent(searchParams!.get('unit') || ''),
     seller_id: buyNowSellerId,
     shop: buyNowSellerId ? {
-      id: buyNowSellerId,
-      store_name: buyNowShopName || `Shop #${buyNowSellerId.slice(-6)}`,
-      avatar_url: null as string | null,
+      id:          buyNowSellerId,
+      store_name:  buyNowShopName || `Shop #${buyNowSellerId.slice(-6)}`,
+      avatar_url:  null as string | null,
     } : undefined,
+    isNegotiated,  // đánh dấu để hiển thị UI
   } : null;
+
+  // Keep legacy alias for buy-now code that references buyNowItem
+  const buyNowItem = singleItem;
 
   const selectedIds = searchParams?.get('ids')?.split(',').filter(Boolean) ?? [];
   const allCartItems = carts[activeUserId] || [];
-  const items = (isBuyNow && buyNowItem)
-    ? [buyNowItem]
+  const items = (isSingleItem && singleItem)
+    ? [singleItem]
     : selectedIds.length > 0
       ? allCartItems.filter(item => selectedIds.includes(item.id))
       : allCartItems;
@@ -155,7 +163,7 @@ export default function CheckoutPage() {
         payment_method: pmMap[paymentMethod] || 'COD',
         seller_orders,
       });
-      if (!isBuyNow) {
+      if (!isBuyNow && !isNegotiated) {
         if (selectedIds.length > 0) {
           removeItems(selectedIds);
         } else {
@@ -324,7 +332,14 @@ export default function CheckoutPage() {
                           <p className="text-sm font-semibold text-gray-800 line-clamp-1">{item.name}</p>
                           <p className="text-xs text-gray-400">{item.unit}</p>
                         </div>
-                        <p className="text-sm font-bold text-gray-900">{(item.price * item.quantity).toLocaleString()}đ</p>
+                        <div className="text-right">
+                          {(item as any).isNegotiated && (
+                            <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold block mb-0.5">
+                              Đã thương lượng
+                            </span>
+                          )}
+                          <p className="text-sm font-bold text-gray-900">{(item.price * item.quantity).toLocaleString()}đ</p>
+                        </div>
                       </div>
                     ))}
                   </div>

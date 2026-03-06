@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Upload, X, Save, Loader2, ChevronRight } from 'lucide-react';
+import { Upload, X, Save, Loader2, ChevronRight, Handshake } from 'lucide-react';
 import { SellerProduct, ProductFormData } from '@/hooks/useSellerProducts';
 
 interface ProductFormProps {
@@ -21,14 +21,20 @@ const CATEGORIES = [
 
 export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormData>({
-    name:        initialData?.name        ?? '',
-    price:       initialData?.price       ?? 0,
-    stock:       initialData?.stock       ?? 100,
-    description: initialData?.description ?? '',
-    unit:        initialData?.unit        ?? 'kg',
-    category:    initialData?.category    ?? 'trai-cay',
-    origin:      initialData?.origin      ?? '',
+    name:                initialData?.name                ?? '',
+    price:               initialData?.price               ?? 0,
+    stock:               initialData?.stock               ?? 100,
+    description:         initialData?.description         ?? '',
+    unit:                initialData?.unit                ?? 'kg',
+    category:            initialData?.category            ?? 'trai-cay',
+    origin:              initialData?.origin              ?? '',
+    min_negotiation_qty: initialData?.min_negotiation_qty ?? null,
   });
+
+  // Negotiation toggle
+  const [allowNegotiation, setAllowNegotiation] = useState(
+    (initialData?.min_negotiation_qty ?? 0) > 0
+  );
 
   // Ảnh hiện có (URL từ server)
   const [existingImages, setExistingImages] = useState<string[]>(initialData?.images ?? []);
@@ -60,9 +66,18 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
     setNewImagePreviews(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const handleNegotiationToggle = (checked: boolean) => {
+    setAllowNegotiation(checked);
+    if (!checked) handleChange('min_negotiation_qty', null);
+  };
+
   const handleSubmit = async () => {
     if (!formData.name.trim()) { setSaveError('Vui lòng nhập tên sản phẩm'); return; }
     if (formData.price <= 0)   { setSaveError('Giá bán phải lớn hơn 0');     return; }
+    if (allowNegotiation && (!formData.min_negotiation_qty || formData.min_negotiation_qty <= 0)) {
+      setSaveError('Vui lòng nhập ngưỡng số lượng tối thiểu cho thương lượng');
+      return;
+    }
     setSaveError(null);
     setSaving(true);
     try {
@@ -222,6 +237,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
         {/* Box 4: Phân loại */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
           <h3 className="font-bold text-lg text-gray-900 mb-4">Phân loại</h3>
+
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
             <div className="relative">
@@ -237,6 +253,58 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <ChevronRight className="absolute right-4 top-3.5 text-gray-400 rotate-90 pointer-events-none" size={16} />
             </div>
           </div>
+        </div>
+
+        {/* Box 5: Thương lượng giá */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+          <h3 className="font-bold text-lg text-gray-900 mb-4 flex items-center gap-2">
+            <Handshake size={18} className="text-green-600" />
+            Thương lượng giá
+          </h3>
+
+          <label className="flex items-center gap-3 cursor-pointer select-none mb-3">
+            <div
+              onClick={() => handleNegotiationToggle(!allowNegotiation)}
+              className={`w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                allowNegotiation ? 'bg-green-500' : 'bg-gray-200'
+              } relative`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+                  allowNegotiation ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </div>
+            <span className="text-sm font-semibold text-gray-800">
+              Cho phép người mua thương lượng giá
+            </span>
+          </label>
+
+          {allowNegotiation && (
+            <div className="mt-3">
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">
+                Số lượng tối thiểu để thương lượng{' '}
+                <span className="text-red-400">*</span>
+                <span className="font-normal text-gray-400 ml-1">({formData.unit || 'đơn vị'})</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={formData.min_negotiation_qty ?? ''}
+                onChange={e =>
+                  handleChange(
+                    'min_negotiation_qty',
+                    e.target.value === '' ? null : Number(e.target.value)
+                  )
+                }
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none font-bold"
+                placeholder={`VD: 50 ${formData.unit || 'kg'}`}
+              />
+              <p className="text-xs text-gray-400 mt-1.5">
+                Người mua chỉ được gửi yêu cầu thương lượng khi mua từ mức này trở lên.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Error */}

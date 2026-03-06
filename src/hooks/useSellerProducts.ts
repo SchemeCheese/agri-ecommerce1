@@ -16,6 +16,8 @@ export interface SellerProduct {
   sold?: number;
   is_active?: boolean;
   created_at: string;
+  /** null = không cho phép thương lượng; > 0 = ngưỡng tối thiểu */
+  min_negotiation_qty?: number | null;
 }
 
 export interface ProductFormData {
@@ -27,6 +29,8 @@ export interface ProductFormData {
   category?: string;
   origin?: string;
   images?: string[];
+  /** null = không cho phép thương lượng; số > 0 = ngưỡng tối thiểu */
+  min_negotiation_qty?: number | null;
 }
 
 export function useSellerProducts() {
@@ -56,6 +60,8 @@ export function useSellerProducts() {
     if (data.unit)        formData.append('unit', data.unit);
     if (data.category)    formData.append('category', data.category);
     if (data.origin)      formData.append('origin', data.origin);
+    if (data.min_negotiation_qty != null)
+      formData.append('min_negotiation_qty', String(data.min_negotiation_qty));
     imageFiles.forEach(f => formData.append('images', f));
 
     const res = await api.post('/products', formData, {
@@ -73,6 +79,9 @@ export function useSellerProducts() {
     if (data.unit !== undefined)        formData.append('unit', data.unit);
     if (data.category !== undefined)    formData.append('category', data.category);
     if (data.origin !== undefined)      formData.append('origin', data.origin);
+    if (data.min_negotiation_qty !== undefined)
+      formData.append('min_negotiation_qty',
+        data.min_negotiation_qty == null ? '' : String(data.min_negotiation_qty));
     imageFiles?.forEach(f => formData.append('images', f));
 
     const res = await api.patch(`/products/${id}`, formData, {

@@ -8,9 +8,10 @@ import { useCartStore } from '@/store/useCartStore';
 import { formatCurrency } from '@/utils/vi';
 import {
   ShoppingCart, Plus, Minus, Star, Ticket, Truck,
-  MapPin, MessageCircle, Store, ChevronRight, ThumbsUp
+  MapPin, MessageCircle, Store, ChevronRight, ThumbsUp, Handshake
 } from 'lucide-react';
 import { ChatWidget } from '@/components/home/ChatWidget';
+import { NegotiationDialog } from '@/components/chat/NegotiationDialog';
 
 const BACKEND_URL = 'http://localhost:3001';
 const fixImg = (url: string) => {
@@ -78,6 +79,7 @@ const ShopInfoCard = ({ shop }: { shop: any }) => (
 // Đã thêm allProducts vào props
 export default function ProductClient({ product, allProducts }: { product: any, allProducts: any[] }) {
   const [quantity, setQuantity] = useState(1);
+  const [showNegotiationDialog, setShowNegotiationDialog] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const addToCart = useCartStore((state) => state.addToCart);
   const router = useRouter();
@@ -228,6 +230,16 @@ export default function ProductClient({ product, allProducts }: { product: any, 
               Mua ngay
             </button>
           </div>
+
+          {/* Nút Thương lượng giá — chỉ hiện khi BE bật min_negotiation_qty */}
+          {product.min_negotiation_qty > 0 && (
+            <button
+              onClick={() => setShowNegotiationDialog(true)}
+              className="w-full mt-2 flex items-center justify-center gap-2 border-2 border-green-600 text-green-700 py-3 rounded-md font-bold hover:bg-green-50 transition"
+            >
+              <Handshake size={20} /> Thương lượng giá
+            </button>
+          )}
         </div>
       </div>
 
@@ -375,6 +387,30 @@ export default function ProductClient({ product, allProducts }: { product: any, 
       </div>
 
       <ChatWidget />
+
+      {/* Dialog thương lượng giá */}
+      {showNegotiationDialog && product.min_negotiation_qty > 0 && (
+        <NegotiationDialog
+          product={{
+            id:                  product.id,
+            name:                product.name,
+            unit:                product.unit || 'kg',
+            min_negotiation_qty: product.min_negotiation_qty,
+          }}
+          onConfirm={(qty) => {
+            setShowNegotiationDialog(false);
+            const sellerId    = product.seller_id || product.shop?.id || '';
+            const productName = encodeURIComponent(product.name);
+            const unit        = encodeURIComponent(product.unit || 'kg');
+            router.push(
+              `/chat?sellerId=${sellerId}&negotiate=1` +
+              `&productId=${product.id}&qty=${qty}` +
+              `&productName=${productName}&unit=${unit}`
+            );
+          }}
+          onClose={() => setShowNegotiationDialog(false)}
+        />
+      )}
     </div>
   );
 }
