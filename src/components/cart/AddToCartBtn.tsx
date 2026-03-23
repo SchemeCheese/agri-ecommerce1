@@ -12,7 +12,7 @@ export default function AddToCartBtn({ product }: Props) {
   const addToCart = useCartStore((state) => state.addToCart);
 
   const handleAdd = () => {
-    addToCart(product);
+    addToCart(product, 1);
     alert(`Đã thêm ${product.name} vào giỏ!`); 
   };
 

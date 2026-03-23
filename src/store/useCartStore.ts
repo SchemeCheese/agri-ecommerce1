@@ -164,6 +164,8 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'agri-cart-storage', // Tên lưu trong LocalStorage
+      version: 2, // Tăng version => tự động xóa cache cũ (shop.id không nhất quán)
+      migrate: () => ({ carts: { guest: [] }, activeUserId: 'guest' }),
     }
   )
 );
