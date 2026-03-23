@@ -4,15 +4,10 @@ import React, { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container'; 
 import { ProductCard } from './ProductCard';
+import { resolveImageUrl } from '@/lib/runtime-config';
 
 const ITEMS_PER_PAGE = 6;
-const BACKEND_URL = 'http://localhost:3001';
-
-const fixImageUrl = (url: string) => {
-  if (!url) return '/placeholder.png';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImageUrl = (url: string) => resolveImageUrl(url);
 
 const CATEGORIES = [
   { id: 'all', label: 'Tất cả' },

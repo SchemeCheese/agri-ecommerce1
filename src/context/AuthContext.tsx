@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import axios from 'axios';
 
 import { useCartStore } from '@/store/useCartStore';
+import { API_BASE_URL } from '@/lib/runtime-config';
 
 // Định nghĩa User khớp với Backend
 interface User {
@@ -23,7 +24,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-const API_URL = 'http://localhost:3001';
+const API_URL = API_BASE_URL;
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);

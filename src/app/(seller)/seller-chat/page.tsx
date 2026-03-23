@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { io, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
+import { API_BASE_URL, SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import {
   MessageCircle, Send, Search, ChevronLeft,
   Loader2, ClipboardList, XCircle, RotateCcw, Bot, Handshake, ExternalLink, CheckCircle2
@@ -98,8 +99,8 @@ export default function SellerChatPage() {
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     if (!token) return;
-    const socket = io('http://localhost:3001/chat', {
-      auth: { token: `Bearer ${token}` }, transports: ['websocket'],
+    const socket = io(`${SOCKET_BASE_URL.replace(/\/$/, '')}/chat`, {
+      auth: { token: `Bearer ${token}` }, transports: ['websocket']
     });
     socket.on('connect',    () => {
       console.log('[SellerChat] connected');
@@ -250,7 +251,7 @@ export default function SellerChatPage() {
               >
                 <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-lg flex-shrink-0 overflow-hidden relative">
                   {conv.partner?.avatar
-                    ? <img src={`http://localhost:3001${conv.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                    ? <img src={resolveImageUrl(conv.partner.avatar)} alt="" className="w-full h-full object-cover" />
                     : name.charAt(0).toUpperCase()}
                   {isNeg && (
                     <span className="absolute -bottom-0.5 -right-0.5 bg-orange-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">🤝</span>
@@ -293,7 +294,7 @@ export default function SellerChatPage() {
                 </button>
                 <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold overflow-hidden">
                   {activeConv.partner?.avatar
-                    ? <img src={`http://localhost:3001${activeConv.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                    ? <img src={resolveImageUrl(activeConv.partner.avatar)} alt="" className="w-full h-full object-cover" />
                     : getPartnerName(activeConv).charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -405,7 +406,7 @@ export default function SellerChatPage() {
                               <div className="flex items-center gap-2 min-w-max">
                                 {cp.image && (
                                   <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0">
-                                    <img src={`http://localhost:3001${cp.image.startsWith('/') ? '' : '/'}${cp.image}`} alt={cp.name} className="w-full h-full object-cover" />
+                                    <img src={resolveImageUrl(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
                                   </div>
                                 )}
                                 <div>
@@ -475,7 +476,9 @@ export default function SellerChatPage() {
                             <Link href={`/products/${cp.id}`} className="flex items-center gap-2 px-3 py-1.5 min-w-max hover:bg-gray-50 transition">
                               {cp.image && (
                                 <div className="w-6 h-6 rounded overflow-hidden flex-shrink-0">
-                                  <img src={`http://localhost:3001${cp.image.startsWith('/') ? '' : '/'}${cp.image}`} alt={cp.name} className="w-full h-full object-cover" />
+                                  <img src={resolveImageUrl(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
+                                   <img src={resolveImageUrl(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
+                                   <img src={resolveImageUrl(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
                                 </div>
                               )}
                               <span className="text-xs text-gray-500">Đang hỏi về:</span>

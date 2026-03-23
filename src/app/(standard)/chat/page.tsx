@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { io, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container';
+import { API_BASE_URL, SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import {
   MessageCircle, Send, Search, ChevronLeft,
   Loader2, Store, Handshake, XCircle, RotateCcw, ShoppingBag, ExternalLink
@@ -14,7 +15,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatCurrency } from '@/utils/vi';
 
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = API_BASE_URL;
+const SOCKET_URL = `${SOCKET_BASE_URL.replace(/\/$/, '')}/chat`;
 const fixImg = (url: string) => {
   if (!url) return '/placeholder.png';
   if (url.startsWith('http')) return url;
@@ -149,7 +151,7 @@ function ChatPageInner() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     if (!token) return;
 
-    const socket = io('http://localhost:3001/chat', {
+    const socket = io(SOCKET_URL, {
       auth: { token: `Bearer ${token}` },
       transports: ['websocket'],
     });
@@ -365,7 +367,7 @@ function ChatPageInner() {
                     >
                       <div className="relative w-12 h-12 rounded-full overflow-hidden bg-green-100 flex-shrink-0 flex items-center justify-center text-green-700 font-black text-lg border border-gray-100">
                         {conv.partner?.avatar
-                          ? <img src={`http://localhost:3001${conv.partner.avatar}`} alt="" className="w-full h-full object-cover"/>
+                          ? <img src={resolveImageUrl(conv.partner.avatar)} alt="" className="w-full h-full object-cover"/>
                           : name.charAt(0).toUpperCase()
                         }
                         {/* Badge icon overlay for negotiation */}
@@ -423,7 +425,7 @@ function ChatPageInner() {
                     </button>
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-green-100 flex-shrink-0 flex items-center justify-center text-green-700 font-black border border-gray-100">
                       {activeConv.partner?.avatar
-                        ? <img src={`http://localhost:3001${activeConv.partner.avatar}`} alt="" className="w-full h-full object-cover"/>
+                        ? <img src={resolveImageUrl(activeConv.partner.avatar)} alt="" className="w-full h-full object-cover"/>
                         : getPartnerName(activeConv).charAt(0).toUpperCase()
                       }
                     </div>

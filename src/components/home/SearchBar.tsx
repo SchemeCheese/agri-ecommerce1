@@ -6,13 +6,9 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/axios';
+import { resolveImageUrl } from '@/lib/runtime-config';
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImg = (url: string) => {
-  if (!url) return '';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImg = (url: string) => resolveImageUrl(url) || '';
 
 interface SearchResult { shops: any[]; products: any[]; }
 

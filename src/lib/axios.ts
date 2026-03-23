@@ -1,8 +1,9 @@
 // src/lib/axios.ts
 import axios from 'axios';
+import { API_BASE_URL } from './runtime-config';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3001', // Thay đổi thành port của Backend NestJS
+  baseURL: API_BASE_URL,
   timeout: 10000,
 });
 

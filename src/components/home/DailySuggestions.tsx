@@ -6,13 +6,9 @@ import { ProductCard } from './ProductCard';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/utils/vi';
 import api from '@/lib/axios';
+import { resolveImageUrl } from '@/lib/runtime-config';
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImg = (url: string) => {
-  if (!url) return '/placeholder.png';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImg = (url: string) => resolveImageUrl(url);
 
 export const DailySuggestions = () => {
   const [products, setProducts] = useState<any[]>([]);

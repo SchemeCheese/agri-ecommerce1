@@ -3,9 +3,10 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import axios from 'axios';
+import { API_BASE_URL } from '@/lib/runtime-config';
 import ShopClient from './ShopClient';
 
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = API_BASE_URL;
 
 export default async function ShopDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
