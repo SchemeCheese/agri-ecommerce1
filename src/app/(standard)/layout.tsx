@@ -32,7 +32,7 @@ export default function StandardLayout({
     <div className="flex flex-col min-h-screen bg-gray-50">
       
       {useTransparent ? (
-        <Header isScrolled={isScrolled} logoSrc={isScrolled ? '/logos/agri-logo-dark.png' : '/logos/agri-logo-light.png'} />
+        <Header isScrolled={isScrolled} logoSrc={isScrolled ? '/logos/agri-connect-large-dark.svg' : '/logos/agri-connect-large-light.svg'} />
       ) : (
         <HeaderSecondary />
       )}

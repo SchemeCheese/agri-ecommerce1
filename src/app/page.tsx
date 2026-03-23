@@ -14,8 +14,8 @@ import { TopShops } from '@/components/home/TopShops';
 import { DailySuggestions } from '@/components/home/DailySuggestions';
 import { ChatWidget } from '@/components/home/ChatWidget';
 
-const LOGO_LIGHT = '/logos/agri-logo-light.png';
-const LOGO_DARK = '/logos/agri-logo-dark.png';
+const LOGO_LIGHT = '/logos/agri-connect-large-light.svg';
+const LOGO_DARK = '/logos/agri-connect-large-dark.svg';
 
 export default function HomePage() {
   const { t } = useTranslation();
