@@ -10,8 +10,12 @@ interface RevenueChartProps {
 }
 
 const formatM = (v: number) => `${(v / 1_000_000).toFixed(1)}M`;
-const formatVND = (v?: number) =>
-  v !== undefined ? v.toLocaleString('vi-VN') + 'đ' : '';
+const formatVND = (v: number | string | readonly (number | string)[] | null | undefined) => {
+  const raw = Array.isArray(v) ? v[0] : v;
+  const num = typeof raw === 'number' ? raw : raw ? Number(raw) : 0;
+  if (Number.isNaN(num)) return '';
+  return num.toLocaleString('vi-VN') + 'đ';
+};
 
 export const RevenueChart = ({ data }: RevenueChartProps) => (
   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -29,7 +33,7 @@ export const RevenueChart = ({ data }: RevenueChartProps) => (
           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
           <YAxis axisLine={false} tickLine={false} tickFormatter={formatM} tick={{ fontSize: 12 }} />
           <Tooltip
-            formatter={(v: number) => [formatVND(v), 'Doanh thu']}
+            formatter={(value) => [formatVND(value), 'Doanh thu']}
             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
           />
           <Area type="monotone" dataKey="revenue" stroke="#16a34a" fillOpacity={1} fill="url(#colorRev)" strokeWidth={2} />

@@ -5,7 +5,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { useEffect, useState } from 'react';
 
 export default function CartIcon() {
-  const items = useCartStore((state) => state.items);
+  const items = useCartStore((state) => state.getItems());
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

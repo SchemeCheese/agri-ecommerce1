@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { useAuth } from '@/context/AuthContext';
@@ -15,6 +15,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-gray-600">Đang tải trang thanh toán...</div>}>
+      <CheckoutPageInner />
+    </Suspense>
+  );
+}
+
+function CheckoutPageInner() {
   const router = useRouter();
   const { user } = useAuth();
   const { carts, activeUserId, clearCart, removeItems } = useCartStore();

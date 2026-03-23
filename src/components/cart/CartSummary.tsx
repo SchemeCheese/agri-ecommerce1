@@ -4,7 +4,8 @@ import { useCartStore } from '@/store/useCartStore';
 
 export const CartSummary = () => {
   const [isMounted, setIsMounted] = useState(false);
-  const { getTotalPrice, items } = useCartStore();
+  const items = useCartStore((state) => state.getItems());
+  const getTotalPrice = useCartStore((state) => state.getTotalPrice);
 
   useEffect(() => {
     setIsMounted(true);

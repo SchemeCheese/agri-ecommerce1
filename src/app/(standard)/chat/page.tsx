@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { io, Socket } from 'socket.io-client';
@@ -38,6 +38,14 @@ const formatTime = (dateStr: string) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-gray-600">Đang tải chat...</div>}>
+      <ChatPageInner />
+    </Suspense>
+  );
+}
+
+function ChatPageInner() {
   const router       = useRouter();
   const { user }     = useAuth();
   const searchParams = useSearchParams();

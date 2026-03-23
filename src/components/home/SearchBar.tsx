@@ -20,7 +20,7 @@ export const SearchBar = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult>({ shops: [], products: [] });
@@ -44,7 +44,7 @@ export const SearchBar = () => {
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
-    clearTimeout(debounceRef.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!val.trim()) {
       setResults({ shops: [], products: [] });
       setShowDropdown(false);

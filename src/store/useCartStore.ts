@@ -22,6 +22,8 @@ interface CartState {
   // Lưu trữ giỏ hàng của TẤT CẢ user. Khóa là UserID (hoặc 'guest')
   carts: Record<string, CartItem[]>;
   activeUserId: string; // ID của user đang đăng nhập, mặc định là 'guest'
+  getItems: () => CartItem[];
+  getTotalPrice: () => number;
 
   // Actions
   setActiveUser: (userId: string | null) => void;
@@ -39,6 +41,20 @@ export const useCartStore = create<CartState>()(
         'guest': []
       },
       activeUserId: 'guest',
+
+      getItems: () => {
+        const state = get();
+        return state.carts[state.activeUserId] || [];
+      },
+
+      getTotalPrice: () => {
+        const items = get().getItems();
+        return items.reduce((sum, item) => {
+          const price = Number(item.price) || 0;
+          const qty = Number(item.quantity) || 0;
+          return sum + price * qty;
+        }, 0);
+      },
 
       // 1. Cập nhật User đang hoạt động
       setActiveUser: (userId) => {
