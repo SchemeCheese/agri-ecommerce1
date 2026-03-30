@@ -69,6 +69,8 @@ export function useSellerProducts() {
     const res = await api.post('/products', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    // refresh list so dashboard cập nhật ngay
+    await fetchProducts();
     return res.data;
   };
 
@@ -90,11 +92,13 @@ export function useSellerProducts() {
     const res = await api.patch(`/products/${id}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    await fetchProducts();
     return res.data;
   };
 
   const deleteProduct = async (id: string) => {
     await api.delete(`/products/${id}`);
+    setProducts(prev => prev.filter(p => p.id !== id));
   };
 
   const fetchProductById = async (id: string): Promise<SellerProduct> => {
