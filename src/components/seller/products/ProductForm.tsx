@@ -41,6 +41,9 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   // Ảnh mới (File objects)
   const [newImageFiles, setNewImageFiles]   = useState<File[]>([]);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
+  // Liên kết ảnh nhập tay
+  const [imageLinksText, setImageLinksText] = useState('');
+  const [imageLinks, setImageLinks] = useState<string[]>([]);
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -81,7 +84,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
     setSaveError(null);
     setSaving(true);
     try {
-      await onSubmit(formData, newImageFiles);
+      await onSubmit({ ...formData, image_urls: imageLinks }, newImageFiles);
     } catch (err: any) {
       setSaveError(err.message || 'Lỗi khi lưu sản phẩm');
     } finally {
@@ -231,6 +234,35 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <span className="text-xs font-bold mt-2">Tải ảnh lên</span>
               <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
             </label>
+          </div>
+
+          {/* Nhập link ảnh thủ công */}
+          <div className="mt-4">
+            <label className="block text-sm font-bold text-gray-700 mb-2">Dán link ảnh (mỗi dòng một link hoặc cách nhau dấu phẩy)</label>
+            <textarea
+              value={imageLinksText}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setImageLinksText(raw);
+                const parsed = raw
+                  .split(/\s|,|\n/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                setImageLinks(parsed);
+              }}
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none text-sm"
+              placeholder="https://example.com/a.jpg"
+            />
+            {imageLinks.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {imageLinks.map((url, idx) => (
+                  <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-green-200">
+                    <Image src={url} alt="link" fill className="object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

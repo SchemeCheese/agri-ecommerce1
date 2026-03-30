@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
         port: '3001',
         pathname: '/**',
       },
+      // Cho phép tải ảnh từ backend deploy (Railway/Render...) và các URL nhập tay
+      { protocol: 'http', hostname: '**' },
+      { protocol: 'https', hostname: '**' },
     ],
   },
 };
