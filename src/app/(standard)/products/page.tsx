@@ -6,13 +6,9 @@ import api from '@/lib/axios';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
 import { Slider } from "@/components/ui/slider";
+import { resolveImageUrl } from '@/lib/runtime-config';
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImageUrl = (url: string) => {
-  if (!url) return '/placeholder.png';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImageUrl = (url: string) => resolveImageUrl(url);
 
 // Sửa lại danh mục khớp với tên trả về từ DB
 const CATEGORIES = [
@@ -98,6 +94,7 @@ export default function ProductListingPage() {
           src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop"
           alt="Products Banner"
           fill
+          sizes="100vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-black/40"></div> {/* Lớp phủ tối để nổi bật Header và Chữ */}

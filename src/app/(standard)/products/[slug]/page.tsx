@@ -1,21 +1,25 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import axios from 'axios';
-import ProductClient from './ProductClient'; 
+import ProductClient from './ProductClient';
+import { API_BASE_URL } from '@/lib/runtime-config';
 
-export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
-  const resolvedParams = await params; 
+export default async function ProductDetailPage({ params }: { params: Promise<{ slug?: string }> }) {
+  const { slug } = await params;
+  if (!slug) return notFound();
   
   try {
-    // 1. Gọi API lấy chi tiết 1 sản phẩm từ Backend
-    const detailRes = await axios.get(`http://localhost:3001/products/${resolvedParams.slug}`);
+    // Cho phép 404 mà không throw để tự kiểm soát
+    const detailRes = await axios.get(`${API_BASE_URL}/products/${encodeURIComponent(slug)}`, {
+      validateStatus: () => true,
+    });
+    if (detailRes.status !== 200) return notFound();
     const product = detailRes.data;
 
-    // 2. Gọi API lấy danh sách TẤT CẢ sản phẩm để làm phần "Gợi ý" và "Sản phẩm cùng Shop"
-    const allRes = await axios.get(`http://localhost:3001/products`);
-    const allProducts = allRes.data;
+    const allRes = await axios.get(`${API_BASE_URL}/products`, { validateStatus: () => true });
+    const allProducts = allRes.status === 200 ? allRes.data : [];
 
-    if (!product) return notFound(); 
+    if (!product) return notFound();
 
     return (
       <div className="container mx-auto px-4 py-8">
@@ -24,6 +28,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     );
   } catch (error) {
     console.error("Lỗi khi tải chi tiết sản phẩm:", error);
-    return notFound(); // Nếu API lỗi hoặc không tìm thấy ID, hiển thị trang 404
+    return notFound();
   }
 }

@@ -14,13 +14,9 @@ import { ChatWidget } from '@/components/home/ChatWidget';
 import { NegotiationDialog } from '@/components/chat/NegotiationDialog';
 import { ChatPopoverWindow } from '@/components/chat/ChatPopoverWindow';
 import api from '@/lib/axios';
+import { resolveImageUrl } from '@/lib/runtime-config';
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImg = (url: string) => {
-  if (!url) return '/placeholder.png';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImg = (url: string) => resolveImageUrl(url);
 
 // --- SUB-COMPONENT: Rating Stars ---
 const RatingStars = ({ rating }: { rating: number }) => (
@@ -57,7 +53,7 @@ const ShopInfoCard = ({ shop, product }: { shop: any; product: any }) => {
     {/* Avatar & Tên */}
     <div className="flex items-center gap-4 border-r border-gray-100 pr-6 min-w-[300px]">
       <div className="relative w-16 h-16 rounded-full overflow-hidden border">
-        <Image src={fixImg(shop.avatar_url || '')} alt={shop.store_name} fill className="object-cover" />
+        <Image src={fixImg(shop.avatar_url || '')} alt={shop.store_name} fill sizes="64px" className="object-cover" />
       </div>
       <div>
         <h3 className="font-bold text-gray-900">{shop.store_name}</h3>
@@ -110,6 +106,8 @@ export default function ProductClient({ product, allProducts }: { product: any, 
   const addToCart = useCartStore((state) => state.addToCart);
   const router = useRouter();
 
+  const isUnavailable = !product.is_active || (product.stock ?? 0) <= 0;
+
   const handleBuyNow = () => {
     const shopName = product.shop?.store_name || product.shop?.name || '';
     router.push(
@@ -159,6 +157,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
               src={fixImg(product.images[activeImage])}
               alt={product.name}
               fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 45vw"
               className="object-cover"
             />
           </div>
@@ -169,7 +168,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
                 onMouseEnter={() => setActiveImage(idx)}
                 className={`relative w-20 h-20 border-2 rounded cursor-pointer shrink-0 ${activeImage === idx ? 'border-green-600' : 'border-transparent'}`}
               >
-                <Image src={fixImg(img)} alt="thumb" fill className="object-cover rounded-sm" />
+                <Image src={fixImg(img)} alt="thumb" fill sizes="80px" className="object-cover rounded-sm" />
               </div>
             ))}
           </div>
@@ -248,14 +247,21 @@ export default function ProductClient({ product, allProducts }: { product: any, 
           <div className="flex gap-4">
             <button
               onClick={handleAddToCart}
+              disabled={isUnavailable}
               className="flex-1 bg-green-50 border border-green-600 text-green-700 py-3 rounded-md font-bold hover:bg-green-100 transition flex justify-center items-center gap-2"
             >
               <ShoppingCart size={20} /> Thêm vào giỏ hàng
             </button>
-            <button onClick={handleBuyNow} className="flex-1 bg-green-600 text-white py-3 rounded-md font-bold hover:bg-green-700 transition">
+            <button onClick={handleBuyNow} disabled={isUnavailable} className="flex-1 bg-green-600 text-white py-3 rounded-md font-bold hover:bg-green-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
               Mua ngay
             </button>
           </div>
+
+          {isUnavailable && (
+            <div className="mt-3 text-sm font-semibold text-red-600 flex items-center gap-2">
+              <Loader2 size={16} className="animate-pulse" /> Sản phẩm tạm hết hàng / ngừng bán
+            </div>
+          )}
 
           {/* Nút thương lượng + Chat ngay */}
           <div className="flex gap-3 mt-2">
