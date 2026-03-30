@@ -10,6 +10,9 @@ import Image from 'next/image';
 import { useCartStore } from '@/store/useCartStore';
 import { useAuth } from '@/context/AuthContext';
 
+const LOGO_LIGHT = '/logos/agri-connect-large-light.svg';
+const LOGO_DARK = '/logos/agri-connect-large-dark.svg';
+
 // 1. THÊM INTERFACE NÀY
 interface HeaderSecondaryProps {
   title?: string;
@@ -41,13 +44,15 @@ export default function HeaderSecondary({ title }: HeaderSecondaryProps) {
 
   const isSeller = user?.role === 'SELLER';
 
+  const logoSrc = LOGO_DARK;
+
   return (
     <header className="bg-white shadow-sm h-16 flex items-center sticky top-0 z-30">
       <Container className="flex justify-between items-center">
         <div className="flex items-center gap-4">
           {/* LOGO */}
           <Link href="/" className="flex-shrink-0">
-            <span className="text-xl font-bold text-green-700">Agri Connect</span>
+            <Image src={logoSrc} alt="Agri Connect" width={160} height={40} className="h-10 w-auto" />
           </Link>
 
           {/* 3. THÊM DÒNG NÀY: Hiển thị tiêu đề trang nếu có */}

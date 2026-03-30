@@ -43,7 +43,7 @@ function LoginContent() {
     if (type === 'buyer') {
       setFormData({ email: 'khach@gmail.com', password: '123456' }); // Sửa lại pass cho khớp với file seed.ts
     } else {
-      setFormData({ email: 'shop1@gmail.com', password: '123456' }); // Sửa lại email/pass của Shop
+      setFormData({ email: 'shop2@gmail.com', password: '123456' }); // Tài khoản seller shop-2 để test
     }
     setError('');
   };

@@ -29,6 +29,13 @@ function CheckoutPageInner() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [momoPayment, setMomoPayment] = useState<{
+    orderId: string;
+    amount: number;
+    payUrl?: string;
+    deeplink?: string;
+    qrCodeUrl?: string;
+  } | null>(null);
 
   // Voucher: per-shop state
   type ShopVoucher = { inputCode: string; code: string; discount_amount: number; isValidating: boolean; error: string };
@@ -166,7 +173,7 @@ function CheckoutPageInner() {
         })),
         voucher_code: voucherByShop[shopId]?.code || undefined,
       }));
-      await api.post('/orders/checkout', {
+      const checkoutRes = await api.post('/orders/checkout', {
         shipping_address: `${address} (SĐT: ${phoneNumber})`,
         payment_method: pmMap[paymentMethod] || 'COD',
         seller_orders,
@@ -178,7 +185,22 @@ function CheckoutPageInner() {
           clearCart();
         }
       }
-      router.push('/order-confirmation');
+      if (paymentMethod === 'momo') {
+        const orderId = checkoutRes.data?.order_ids?.[0];
+        if (!orderId) {
+          throw new Error('Không lấy được order_id sau khi đặt hàng.');
+        }
+        const payRes = await api.post('/payments/momo/create', { order_id: orderId });
+        setMomoPayment({
+          orderId,
+          amount: finalTotal,
+          payUrl: payRes.data?.payUrl,
+          deeplink: payRes.data?.deeplink,
+          qrCodeUrl: payRes.data?.qrCodeUrl,
+        });
+      } else {
+        router.push('/order-confirmation');
+      }
     } catch (error: any) {
       alert(error.response?.data?.message || 'Lỗi đặt hàng. Hãy thử xóa giỏ và thêm lại sản phẩm.');
     } finally {
@@ -197,6 +219,80 @@ function CheckoutPageInner() {
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
+
+      {momoPayment && (
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4 relative">
+            <button
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+              onClick={() => setMomoPayment(null)}
+            >
+              <X size={18} />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="bg-pink-100 text-pink-600 p-2 rounded-lg"><Wallet size={18} /></div>
+              <div>
+                <p className="text-sm text-gray-500">Thanh toán MoMo</p>
+                <p className="font-semibold text-gray-900">Đơn #{momoPayment.orderId}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4 text-center space-y-2">
+              <p className="text-sm text-gray-600">Số tiền cần thanh toán</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {momoPayment.amount.toLocaleString('vi-VN')} đ
+              </p>
+            </div>
+
+            {momoPayment.qrCodeUrl ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl p-3">
+                  <Image src={momoPayment.qrCodeUrl} alt="MoMo QR" width={240} height={240} />
+                </div>
+                <p className="text-sm text-gray-500 text-center">Quét QR bằng ứng dụng MoMo để hoàn tất thanh toán</p>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 text-center">
+                Không nhận được QR từ MoMo. Vui lòng mở liên kết thanh toán.
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {momoPayment.payUrl && (
+                <a
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-pink-600 text-white font-semibold shadow-sm hover:bg-pink-700 transition"
+                  href={momoPayment.payUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Mở MoMo (web)
+                </a>
+              )}
+              {momoPayment.deeplink && (
+                <a
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-pink-600 text-pink-600 font-semibold hover:bg-pink-50 transition"
+                  href={momoPayment.deeplink}
+                >
+                  Mở MoMo (app)
+                </a>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
+              <span>Đã thanh toán xong?</span>
+              <button
+                className="text-green-600 font-semibold hover:text-green-700"
+                onClick={() => {
+                  setMomoPayment(null);
+                  router.push('/profile?tab=orders');
+                }}
+              >
+                Xem đơn hàng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- BANNER ĐẦU TRANG (đồng bộ với /products và /about) --- */}
       <div className="relative w-full h-[20vh] min-h-[160px] flex items-center justify-center">
