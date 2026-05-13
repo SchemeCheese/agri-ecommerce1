@@ -7,11 +7,13 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/axios'; 
 import { useAuth } from '@/context/AuthContext';
 import { Mail, Lock, User, ArrowRight, CheckCircle, Store, ShieldCheck } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { loginWithGoogle } = useAuth();
-  
+  const { registerWithGoogle } = useAuth();
+  const { show: showToast, ToastNode } = useToast();
+
   // --- STATES ---
   const [step, setStep] = useState<1 | 2>(1); // Step 1: Điền Form | Step 2: Nhập OTP
   const [userId, setUserId] = useState(''); // Lưu ID để xác thực
@@ -22,30 +24,27 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'BUYER' as 'BUYER' | 'SELLER'
+    is_buyer: true,
+    is_seller: false
   });
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const selectRole = (role: 'BUYER' | 'SELLER') => {
-    setFormData({ ...formData, role });
+  const selectRole = (role: 'buyer' | 'seller') => {
+    setFormData(prev => ({ ...prev, is_buyer: role === 'buyer', is_seller: role === 'seller' }));
   };
 
   // --- HÀM SUBMIT BƯỚC 1: TẠO TÀI KHOẢN & NHẬN OTP ---
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setSuccess('');
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp!");
+      showToast('Mật khẩu xác nhận không khớp!', 'error');
       setLoading(false);
       return;
     }
@@ -55,19 +54,19 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         full_name: formData.fullName,
-        role: formData.role 
+        is_buyer: formData.is_buyer,
+        is_seller: formData.is_seller,
       });
 
-      // Thành công -> Lưu userId lại và chuyển sang Bước 2
       setUserId(response.data.userId);
-      setSuccess("Mã OTP đã được gửi đến Email của bạn!");
-      setStep(2); // Chuyển giao diện
-      
+      showToast('Mã OTP đã được gửi đến Email của bạn!', 'success');
+      setStep(2);
+
     } catch (error: any) {
       if (error.response?.status === 409 || error.response?.status === 400) {
-        setError(error.response?.data?.message || 'Email này đã được sử dụng.');
+        showToast(error.response?.data?.message || 'Email này đã được sử dụng.', 'error');
       } else {
-        setError("Đăng ký thất bại. Vui lòng thử lại.");
+        showToast('Đăng ký thất bại. Vui lòng thử lại.', 'error');
       }
     } finally {
       setLoading(false);
@@ -78,27 +77,19 @@ export default function RegisterPage() {
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     if (otp.length !== 6) {
-      setError("Vui lòng nhập đầy đủ 6 số OTP.");
+      showToast('Vui lòng nhập đầy đủ 6 số OTP.', 'error');
       setLoading(false);
       return;
     }
 
     try {
-      await api.post('/auth/verify-email', {
-        userId: userId,
-        code: otp
-      });
-
-      setSuccess("Xác thực thành công! Đang chuyển hướng...");
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
-      
+      await api.post('/auth/verify-email', { userId, code: otp });
+      showToast('Xác thực thành công! Đang chuyển hướng...', 'success');
+      setTimeout(() => router.push('/login'), 1500);
     } catch (error: any) {
-      setError(error.response?.data?.message || "Mã OTP không hợp lệ hoặc đã hết hạn.");
+      showToast(error.response?.data?.message || 'Mã OTP không hợp lệ hoặc đã hết hạn.', 'error');
     } finally {
       setLoading(false);
     }
@@ -106,18 +97,20 @@ export default function RegisterPage() {
 
   const handleGoogleRegister = async () => {
     setLoading(true);
-    setError('');
-    setSuccess('');
-
-    const success = await loginWithGoogle(formData.role);
-    if (!success) {
-      setError('Đăng ký Google thất bại. Vui lòng thử lại.');
+    try {
+      const role = formData.is_buyer ? 'BUYER' : 'SELLER';
+      const result = await registerWithGoogle(role);
+      showToast(result.message || 'Đăng ký Google thành công!', 'success');
+      setTimeout(() => router.push('/login'), 1200);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || error.message || 'Đăng ký Google thất bại. Vui lòng thử lại.', 'error');
       setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex bg-white font-sans">
+      {ToastNode}
       
       {/* CỘT TRÁI: ẢNH */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">
@@ -146,10 +139,6 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          {/* Hiển thị thông báo */}
-          {error && <p className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-lg border border-red-100">{error}</p>}
-          {success && <p className="text-green-700 text-sm text-center font-medium bg-green-50 p-3 rounded-lg border border-green-100">{success}</p>}
-
           {/* ================= GIAO DIỆN BƯỚC 1: ĐIỀN FORM ================= */}
           {step === 1 && (
             <form className="mt-8 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500" onSubmit={handleRegister}>
@@ -157,13 +146,13 @@ export default function RegisterPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Bạn là ai?</label>
                 <div className="grid grid-cols-2 gap-4">
-                  <div onClick={() => selectRole('BUYER')} className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center transition-all ${formData.role === 'BUYER' ? 'border-green-600 bg-green-50 ring-1 ring-green-600' : 'border-gray-200 hover:border-green-300'}`}>
-                    <User className={`h-6 w-6 mb-2 ${formData.role === 'BUYER' ? 'text-green-600' : 'text-gray-400'}`} />
-                    <span className={`text-sm font-bold ${formData.role === 'BUYER' ? 'text-green-700' : 'text-gray-500'}`}>Người mua</span>
+                  <div onClick={() => selectRole('buyer')} className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center transition-all ${formData.is_buyer ? 'border-green-600 bg-green-50 ring-1 ring-green-600' : 'border-gray-200 hover:border-green-300'}`}>
+                    <User className={`h-6 w-6 mb-2 ${formData.is_buyer ? 'text-green-600' : 'text-gray-400'}`} />
+                    <span className={`text-sm font-bold ${formData.is_buyer ? 'text-green-700' : 'text-gray-500'}`}>Người mua</span>
                   </div>
-                  <div onClick={() => selectRole('SELLER')} className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center transition-all ${formData.role === 'SELLER' ? 'border-green-600 bg-green-50 ring-1 ring-green-600' : 'border-gray-200 hover:border-green-300'}`}>
-                    <Store className={`h-6 w-6 mb-2 ${formData.role === 'SELLER' ? 'text-green-600' : 'text-gray-400'}`} />
-                    <span className={`text-sm font-bold ${formData.role === 'SELLER' ? 'text-green-700' : 'text-gray-500'}`}>Người bán</span>
+                  <div onClick={() => selectRole('seller')} className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center transition-all ${formData.is_seller ? 'border-green-600 bg-green-50 ring-1 ring-green-600' : 'border-gray-200 hover:border-green-300'}`}>
+                    <Store className={`h-6 w-6 mb-2 ${formData.is_seller ? 'text-green-600' : 'text-gray-400'}`} />
+                    <span className={`text-sm font-bold ${formData.is_seller ? 'text-green-700' : 'text-gray-500'}`}>Người bán</span>
                   </div>
                 </div>
               </div>

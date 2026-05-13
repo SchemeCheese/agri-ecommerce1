@@ -4,68 +4,71 @@
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/ui/Toast';
 import { Mail, Lock, ArrowRight, User, Store } from 'lucide-react';
 
 function LoginContent() {
-  const router = useRouter(); 
-  const searchParams = useSearchParams(); 
-  const returnUrl = searchParams.get('returnUrl'); // Lấy đường dẫn cũ (nếu có)
-  
+  const router = useRouter();
+
   const { login, loginWithGoogle } = useAuth();
-  
+  const { show: showToast, ToastNode } = useToast();
+
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [selectedRole, setSelectedRole] = useState<'BUYER' | 'SELLER'>('BUYER');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
-    // Gọi hàm login từ Context 
-    const success = await login(formData.email, formData.password);
-    
-    if (success) {
-      // Nếu có returnUrl (ví dụ từ giỏ hàng chuyển sang) thì quay lại đó
-      if (returnUrl) {
-         router.push(returnUrl);
-      }
-      // Nếu không có, Context đã tự động xử lý redirect (Buyer -> Home, Seller -> Dashboard)
+    const loggedUser = await login(formData.email, formData.password);
+
+    if (loggedUser) {
+      showToast('Đăng nhập thành công! Đang chuyển hướng đến trang chính...', 'success');
+      setTimeout(() => {
+        router.push('/');
+      }, 1200);
     } else {
-      setError('Email hoặc mật khẩu không chính xác!');
+      showToast('Email hoặc mật khẩu không chính xác!', 'error');
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    setError('');
-    const success = await loginWithGoogle('BUYER');
-    if (!success) {
-      setError('Đăng nhập Google thất bại. Vui lòng thử lại.');
+    try {
+      const result = await loginWithGoogle(selectedRole);
+      showToast(result.message || 'Đăng nhập Google thành công!', 'success');
+      setTimeout(() => router.push('/'), 1200);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || error.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.', 'error');
       setLoading(false);
     }
   };
 
   const fillCredential = (type: 'buyer' | 'seller') => {
     if (type === 'buyer') {
-      setFormData({ email: 'khach@gmail.com', password: '123456' }); // Sửa lại pass cho khớp với file seed.ts
+      setFormData({ email: 'khach@gmail.com', password: '123456' });
     } else {
-      setFormData({ email: 'shop2@gmail.com', password: '123456' }); // Tài khoản seller shop-2 để test
+      setFormData({ email: 'shop2@gmail.com', password: '123456' });
     }
-    setError('');
+  };
+
+  const selectGoogleRole = (role: 'buyer' | 'seller') => {
+    setSelectedRole(role === 'buyer' ? 'BUYER' : 'SELLER');
   };
 
   return (
-    <div className="min-h-screen flex bg-white font-sans"> 
-      
+    <div className="min-h-screen flex bg-white font-sans">
+      {ToastNode}
+
       {/* --- CỘT TRÁI: ẢNH --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">
-        <Image 
-          src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop" 
-          alt="Agriculture" 
+        <Image
+          src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop"
+          alt="Agriculture"
           fill
           className="object-cover opacity-80"
         />
@@ -89,12 +92,12 @@ function LoginContent() {
 
           {/* --- NÚT TEST NHANH --- */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-             <button type="button" onClick={() => fillCredential('buyer')} className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition border border-blue-100">
-                <User size={16} /> Test Khách
-             </button>
-             <button type="button" onClick={() => fillCredential('seller')} className="flex items-center justify-center gap-2 py-2 px-4 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition border border-green-100">
-                <Store size={16} /> Test Chủ Shop
-             </button>
+            <button type="button" onClick={() => fillCredential('buyer')} className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition border border-blue-100">
+              <User size={16} /> Test Khách
+            </button>
+            <button type="button" onClick={() => fillCredential('seller')} className="flex items-center justify-center gap-2 py-2 px-4 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition border border-green-100">
+              <Store size={16} /> Test Chủ Shop
+            </button>
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -128,9 +131,6 @@ function LoginContent() {
               </div>
             </div>
 
-            {/* Hiển thị lỗi nếu có */}
-            {error && <p className="text-red-500 text-sm text-center font-medium bg-red-50 p-2 rounded-lg">{error}</p>}
-
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input id="remember-me" type="checkbox" className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer" />
@@ -152,22 +152,39 @@ function LoginContent() {
           </form>
 
           <div className="text-center mt-6">
-             <p className="text-sm text-gray-600">
-               Chưa có tài khoản?{' '}
-               <Link href="/register" className="font-semibold text-green-600 hover:text-green-500 transition-colors">
-                 Đăng ký miễn phí
-               </Link>
-             </p>
+            <p className="text-sm text-gray-600">
+              Chưa có tài khoản?{' '}
+              <Link href="/register" className="font-semibold text-green-600 hover:text-green-500 transition-colors">
+                Đăng ký miễn phí
+              </Link>
+            </p>
           </div>
 
-           <div className="mt-8">
+          <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
               <div className="relative flex justify-center text-sm"><span className="px-2 bg-gray-50 lg:bg-white text-gray-500">Hoặc tiếp tục với</span></div>
             </div>
-            
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button type="button" onClick={handleGoogleLogin} className="flex justify-center items-center py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition bg-white">
+
+            {/* Role selector cho Google login — single-select */}
+            <div className="mt-4">
+              <p className="text-xs text-gray-500 mb-2 text-center">Bạn muốn đăng nhập với vai trò:</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button"
+                  onClick={() => selectGoogleRole('buyer')}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${selectedRole === 'BUYER' ? 'border-green-600 bg-green-50 text-green-700 ring-1 ring-green-600' : 'border-gray-200 text-gray-500 hover:border-green-300'}`}>
+                  <User size={16} /> Người mua
+                </button>
+                <button type="button"
+                  onClick={() => selectGoogleRole('seller')}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${selectedRole === 'SELLER' ? 'border-green-600 bg-green-50 text-green-700 ring-1 ring-green-600' : 'border-gray-200 text-gray-500 hover:border-green-300'}`}>
+                  <Store size={16} /> Người bán
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <button type="button" onClick={handleGoogleLogin} disabled={loading} className="flex justify-center items-center py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition bg-white disabled:opacity-70">
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
@@ -178,10 +195,10 @@ function LoginContent() {
               </button>
 
               <button type="button" className="flex justify-center items-center py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition bg-white">
-                 <svg className="h-5 w-5 mr-2 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.791-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                 </svg>
-                 <span className="font-medium text-sm text-gray-700">Facebook</span>
+                <svg className="h-5 w-5 mr-2 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.791-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                <span className="font-medium text-sm text-gray-700">Facebook</span>
               </button>
             </div>
           </div>
@@ -196,5 +213,5 @@ export default function LoginPage() {
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Đang tải...</div>}>
       <LoginContent />
     </Suspense>
-  )
+  );
 }
