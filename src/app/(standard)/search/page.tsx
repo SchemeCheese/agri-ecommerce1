@@ -6,14 +6,10 @@ import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
 import { Loader2, Store, Star, Package } from 'lucide-react';
 import api from '@/lib/axios';
+import { resolveBackendUrl } from '@/lib/runtime-config';
 import Link from 'next/link';
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImg = (url: string) => {
-  if (!url) return '/placeholder.png';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImg = (url: string) => resolveBackendUrl(url) || '/placeholder.png';
 
 function SearchContent() {
   const searchParams = useSearchParams();

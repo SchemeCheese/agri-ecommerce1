@@ -15,6 +15,7 @@ import { NegotiationDialog } from '@/components/chat/NegotiationDialog';
 import { ChatPopoverWindow } from '@/components/chat/ChatPopoverWindow';
 import api from '@/lib/axios';
 import { resolveImageUrl } from '@/lib/runtime-config';
+import { useAuth } from '@/context/AuthContext';
 
 const fixImg = (url: string) => resolveImageUrl(url);
 
@@ -34,9 +35,16 @@ const RatingStars = ({ rating }: { rating: number }) => (
 // --- SUB-COMPONENT: Shop Info Card ---
 const ShopInfoCard = ({ shop, product }: { shop: any; product: any }) => {
   const router = useRouter();
+  const { user } = useAuth();
   const [chatShopLoading, setChatShopLoading] = useState(false);
 
   const handleChatShop = async () => {
+    if (!user) {
+      const returnUrl = `/products/${product.id}`;
+      router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+      return;
+    }
+
     setChatShopLoading(true);
     try {
       const res = await api.post('/chat/initiate', { partnerId: shop.id });
@@ -105,8 +113,18 @@ export default function ProductClient({ product, allProducts }: { product: any, 
   const [activeImage, setActiveImage] = useState(0);
   const addToCart = useCartStore((state) => state.addToCart);
   const router = useRouter();
+  const { user } = useAuth();
 
   const isUnavailable = !product.is_active || (product.stock ?? 0) <= 0;
+
+  const handleOpenChatPanel = () => {
+    if (!user) {
+      const returnUrl = `/products/${product.id}`;
+      router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+      return;
+    }
+    setShowChatPanel(true);
+  };
 
   const handleBuyNow = () => {
     const shopName = product.shop?.store_name || product.shop?.name || '';
@@ -272,7 +290,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
               <Handshake size={18} /> Thương lượng giá
             </button>
             <button
-              onClick={() => setShowChatPanel(true)}
+              onClick={handleOpenChatPanel}
               className="flex-1 flex items-center justify-center gap-2 border-2 border-green-500 text-green-700 py-3 rounded-md font-bold hover:bg-green-50 transition"
             >
               <MessageCircle size={18} /> Chat ngay

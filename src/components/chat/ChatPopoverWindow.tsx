@@ -8,11 +8,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { X, Send, Loader2, MessageCircle, ChevronDown, ExternalLink } from 'lucide-react';
 import api from '@/lib/axios';
 import { formatCurrency } from '@/utils/vi';
 import { Message, extractQuote } from '@/types/chat';
+import { SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProductInfo {
   id:    string;
@@ -34,20 +37,17 @@ interface Props {
   onClose: () => void;
 }
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImg = (url: string) => {
-  if (!url) return '/placeholder.png';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const SOCKET_URL = `${SOCKET_BASE_URL.replace(/\/$/, '')}/chat`;
 
 export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
+  const router = useRouter();
+  const { user } = useAuth();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages,       setMessages]       = useState<Message[]>([]);
   const [inputText,      setInputText]      = useState('');
   const [loading,        setLoading]        = useState(true);
   const [sending,        setSending]        = useState(false);
-  const [currentUser,   setCurrentUser]    = useState<{ id: string } | null>(null);
+  const [hasToken, setHasToken] = useState(true);
 
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -55,18 +55,22 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
   // Ref mirrors state — callbacks always get latest conversationId without stale closure
   const convIdRef      = useRef<string>('');
 
-  // Get current user id
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('user');
-      if (raw) setCurrentUser(JSON.parse(raw));
-    } catch { /* ignore */ }
+      const token = localStorage.getItem('access_token');
+      setHasToken(!!token);
+    } catch {
+      setHasToken(false);
+    }
   }, []);
 
   // Init: create/find conversation, connect socket, load messages
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
     const init = async (socket: Socket) => {
       try {
@@ -99,7 +103,7 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
     };
 
     // Setup socket
-    const socket = io(`${BACKEND_URL}/chat`, {
+    const socket = io(SOCKET_URL, {
       auth: { token: `Bearer ${token}` },
       transports: ['websocket'],
     });
@@ -159,7 +163,7 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
       <div className="bg-green-600 px-4 py-3 flex items-center gap-3 flex-shrink-0">
         <div className="w-8 h-8 rounded-full overflow-hidden bg-green-500 flex-shrink-0 border border-green-400">
           {shop.avatar_url
-            ? <img src={fixImg(shop.avatar_url)} alt="" className="w-full h-full object-cover" />
+            ? <img src={resolveImageUrl(shop.avatar_url)} alt="" className="w-full h-full object-cover" />
             : <span className="w-full h-full flex items-center justify-center text-white font-bold text-sm">{shop.store_name[0]}</span>}
         </div>
         <div className="flex-1 min-w-0">
@@ -183,12 +187,36 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
         </div>
       </div>
 
+      {!hasToken ? (
+        <div className="flex-1 bg-white flex flex-col items-center justify-center text-center px-6">
+          <div className="w-16 h-16 rounded-full bg-green-50 border border-green-100 flex items-center justify-center mb-4">
+            <MessageCircle size={28} className="text-green-300" />
+          </div>
+          <p className="font-bold text-gray-800">Cần đăng nhập để chat</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Đăng nhập để nhắn tin với shop và theo dõi lịch sử.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const returnUrl = `/products/${product.id}`;
+              router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+              onClose();
+            }}
+            className="mt-5 bg-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
+          >
+            Đăng nhập
+          </button>
+        </div>
+      ) : (
+        <>
+
       {/* ── Product badge (horizontal scrollable) ── */}
       <div className="flex-shrink-0 border-b border-gray-100 overflow-x-auto">
         <div className="flex items-center gap-3 px-3 py-2 min-w-max">
           <Link href={`/products/${product.id}`} className="flex items-center gap-2 group">
             <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0">
-              <img src={fixImg(product.image || '')} alt={product.name} className="w-full h-full object-cover" />
+              <img src={resolveImageUrl(product.image || '')} alt={product.name} className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">Đang hỏi về</p>
@@ -221,7 +249,7 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
         )}
 
         {messages.map((msg, idx) => {
-          const isMe    = currentUser ? msg.sender?.id === currentUser.id : false;
+          const isMe    = !!user && msg.sender?.id === user.id;
           const prevMsg = messages[idx - 1];
           const showTime = !prevMsg ||
             new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() > 5 * 60 * 1000;
@@ -311,6 +339,9 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
           {sending ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
         </button>
       </div>
+
+        </>
+      )}
     </div>
   );
 };

@@ -7,10 +7,8 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Interceptor: Tự động đính kèm Token (nếu có) trước khi gửi request
 api.interceptors.request.use(
   (config) => {
-    // Chỉ chạy trên trình duyệt (client-side)
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('access_token');
       if (token) {
@@ -19,9 +17,27 @@ api.interceptors.request.use(
     }
     return config;
   },
+  (error) => Promise.reject(error),
+);
+
+api.interceptors.response.use(
+  (response) => response,
   (error) => {
+    if (!error.response) {
+      // No response means the request never reached the server
+      console.error(
+        `[API] Network error — could not reach ${API_BASE_URL}. ` +
+        'Is the backend running? Check: cd BE/agri-connect-be && npm run start:dev',
+        error.message,
+      );
+    } else {
+      console.error(
+        `[API] ${error.config?.method?.toUpperCase()} ${error.config?.url} → ${error.response.status}`,
+        error.response.data,
+      );
+    }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

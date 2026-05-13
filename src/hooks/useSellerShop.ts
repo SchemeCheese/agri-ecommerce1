@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '@/lib/axios';
+import { resolveBackendUrl } from '@/lib/runtime-config';
 
 export interface SellerShopProfile {
   id: string;
@@ -35,9 +36,7 @@ export function useSellerShop() {
         store_address:     d.profile?.address           || '',
         store_phone:       d.phone_number               || '',
         // Guard: if BE already returns a full URL, don't double-prefix
-        avatar_url:        d.avatar
-          ? (d.avatar.startsWith('http') ? d.avatar : `http://localhost:3001${d.avatar}`)
-          : '',
+        avatar_url:        resolveBackendUrl(d.avatar),
         banner_url:        d.profile?.banner_url        || '',
         rating:            d.profile?.rating            || 0,
       });
@@ -70,7 +69,7 @@ export function useSellerShop() {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (av.data?.avatar) {
-          setShop(prev => prev ? { ...prev, avatar_url: `http://localhost:3001${av.data.avatar}` } : prev);
+          setShop(prev => prev ? { ...prev, avatar_url: resolveBackendUrl(av.data.avatar) } : prev);
         }
       }
 

@@ -3,9 +3,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import axios from 'axios';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 import { useCartStore } from '@/store/useCartStore';
 import { API_BASE_URL } from '@/lib/runtime-config';
+import api from '@/lib/axios';
+import { firebaseAuth } from '@/lib/firebase';
 
 // Định nghĩa User khớp với Backend
 interface User {
@@ -19,6 +22,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<boolean>;
+  loginWithGoogle: (role?: 'BUYER' | 'SELLER' | 'ADMIN') => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -107,6 +111,78 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const loginWithGoogle = async (role: 'BUYER' | 'SELLER' | 'ADMIN' = 'BUYER') => {
+    setIsLoading(true);
+    try {
+      console.log('[Auth] Initializing Google login...');
+      const auth = firebaseAuth();
+      console.log('[Auth] Auth instance ready');
+      
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ 
+        prompt: 'select_account',
+        display: 'popup'
+      });
+
+      console.log('[Auth] Starting popup sign-in...');
+      let result;
+      try {
+        result = await signInWithPopup(auth, provider);
+      } catch (popupError: any) {
+        const errorCode = popupError?.code;
+        const errorMsg = popupError?.message || String(popupError);
+        
+        console.error('[Auth] Popup error:', { code: errorCode, message: errorMsg });
+        
+        // Handle specific popup errors
+        if (errorCode === 'auth/popup-blocked') {
+          throw new Error('Popup bị chặn. Vui lòng cho phép popup trong trình duyệt.');
+        } else if (errorCode === 'auth/cancelled-popup-request') {
+          console.log('[Auth] User cancelled login');
+          return false;
+        } else if (errorCode === 'auth/popup-closed-by-user') {
+          console.log('[Auth] User closed popup');
+          return false;
+        }
+        throw new Error(errorMsg || 'Lỗi đăng nhập Google');
+      }
+
+      console.log('[Auth] Google sign-in successful');
+      const idToken = await result.user.getIdToken();
+      console.log('[Auth] ID token retrieved');
+
+      console.log('[Auth] Sending token to backend...');
+      const response = await api.post('/auth/firebase', {
+        idToken,
+        role,
+      });
+
+      const { access_token, user } = response.data;
+      localStorage.setItem('access_token', access_token);
+      localStorage.setItem('agri_user', JSON.stringify(user));
+      setUser(user);
+      useCartStore.getState().setActiveUser(user.id);
+
+      const nextRole = user.role?.toUpperCase();
+      if (nextRole === 'SELLER') {
+        router.push('/dashboard');
+      } else if (nextRole === 'ADMIN') {
+        router.push('/admin');
+      } else {
+        router.push('/');
+      }
+
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      console.error('[Auth] Google login failed:', errorMessage);
+      alert(`Lỗi đăng nhập: ${errorMessage}`);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 3. Hàm Logout: Xóa sạch và chuyển trang
   const logout = () => {
     setUser(null);
@@ -126,7 +202,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

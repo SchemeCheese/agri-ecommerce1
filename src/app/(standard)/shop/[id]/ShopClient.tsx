@@ -16,13 +16,9 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import api from '@/lib/axios';
+import { resolveBackendUrl } from '@/lib/runtime-config';
 
-const BACKEND_URL = 'http://localhost:3001';
-const fixImg = (url: string) => {
-  if (!url) return '';
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-};
+const fixImg = (url: string) => resolveBackendUrl(url);
 
 interface ShopClientProps {
   shop: any;

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Container } from '@/components/ui/Container';
 import api from '@/lib/axios';
+import { resolveBackendUrl } from '@/lib/runtime-config';
 import Image from 'next/image';
 import {
   User, Package, ShoppingBag, Clock,
@@ -15,13 +16,20 @@ import {
 import Link from 'next/link';
 import { OrderTimeline } from '@/components/ui/OrderTimeline';
 
+type ProfileUser = {
+  full_name?: string;
+  phone_number?: string;
+  avatar?: string | null;
+  email?: string;
+  role?: string;
+};
+
 export default function ProfilePage() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'reviews' | 'vouchers'>('info');
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [showBuyerCancelDialog, setShowBuyerCancelDialog] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -35,23 +43,17 @@ export default function ProfilePage() {
   const [showWriteReview, setShowWriteReview] = useState<any>(null);
   const [savedVouchers, setSavedVouchers] = useState<any[]>([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
-
-  // Track scroll để header đổi màu
-  useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 10);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  const profileUser = user as ProfileUser | null;
 
   // Khởi tạo form profile từ user
   useEffect(() => {
-    if (user) {
-      setProfileForm({ full_name: user.full_name || '', phone_number: (user as any).phone_number || '' });
-      if ((user as any).avatar) {
-        setAvatarPreview(`http://localhost:3001${(user as any).avatar}`);
+    if (profileUser) {
+      setProfileForm({ full_name: profileUser.full_name || '', phone_number: profileUser.phone_number || '' });
+      if (profileUser.avatar) {
+        setAvatarPreview(resolveBackendUrl(profileUser.avatar));
       }
     }
-  }, [user]);
+  }, [profileUser]);
 
   // Load reviews tab
   useEffect(() => {
@@ -152,7 +154,7 @@ export default function ProfilePage() {
         const res = await api.post('/profile/me/avatar', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        if (res.data?.avatar) setAvatarPreview(`http://localhost:3001${res.data.avatar}`);
+        if (res.data?.avatar) setAvatarPreview(resolveBackendUrl(res.data.avatar));
       }
       setEditMode(false);
       setAvatarFile(null);
@@ -323,8 +325,8 @@ export default function ProfilePage() {
                           setEditMode(false);
                           setAvatarFile(null);
                           setProfileSaveError('');
-                          setProfileForm({ full_name: user?.full_name || '', phone_number: (user as any)?.phone_number || '' });
-                          if ((user as any)?.avatar) setAvatarPreview(`http://localhost:3001${(user as any).avatar}`);
+                          setProfileForm({ full_name: profileUser?.full_name || '', phone_number: profileUser?.phone_number || '' });
+                          if (profileUser?.avatar) setAvatarPreview(resolveBackendUrl(profileUser.avatar));
                           else setAvatarPreview('');
                         }}
                         className="text-sm font-semibold text-gray-500 hover:bg-gray-100 px-4 py-2 rounded-xl transition-all border border-gray-200">
@@ -388,7 +390,7 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <InfoField icon={<User size={15}/>}   label="Họ và tên"     value={user?.full_name} />
                       <InfoField icon={<Mail size={15}/>}   label="Email"          value={user?.email} />
-                      <InfoField icon={<Phone size={15}/>}  label="Số điện thoại" value={(user as any)?.phone_number} />
+                      <InfoField icon={<Phone size={15}/>}  label="Số điện thoại" value={profileUser?.phone_number} />
                       <InfoField icon={<Shield size={15}/>} label="Vai trò"        value={user?.role === 'SELLER' ? 'Nhà vườn / Người bán' : 'Khách hàng'} />
                     </div>
                   )}
