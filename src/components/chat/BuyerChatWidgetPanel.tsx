@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import {
   ChevronLeft,
+  ImagePlus,
   Loader2,
   Maximize2,
   MessageCircle,
@@ -94,8 +95,10 @@ export default function BuyerChatWidgetPanel({
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoadingMsgs(true);
     try {
-      const res = await api.get(`/chat/conversations/${conversationId}/messages`);
-      setMessages(res.data || []);
+      const res = await api.get(`/chat/conversations/${conversationId}/messages?limit=30`);
+      const payload = res.data;
+      const items = Array.isArray(payload) ? payload : payload?.items ?? [];
+      setMessages(items);
     } catch {
       setMessages([]);
     } finally {
@@ -157,6 +160,23 @@ export default function BuyerChatWidgetPanel({
       }
     });
 
+    // BE-driven unread count
+    socket.on(
+      'unreadUpdated',
+      (payload: { conversationId: string; unread: number; totalUnread: number }) => {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === payload.conversationId ? { ...c, unread_count: payload.unread } : c)),
+        );
+        if (payload.unread === 0) {
+          setUnreadConvIds((prev) => {
+            const next = new Set(prev);
+            next.delete(payload.conversationId);
+            return next;
+          });
+        }
+      },
+    );
+
     socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: QuoteData['status'] }) => {
       setMessages((prev) =>
         prev.map((m) => {
@@ -201,10 +221,50 @@ export default function BuyerChatWidgetPanel({
     socketRef.current.emit('sendMessage', {
       conversationId: activeConv.id,
       content: inputText.trim(),
+      clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     });
     setInputText('');
     setSending(false);
   }, [inputText, activeConv]);
+
+  // ── Image upload ──────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const handlePickImage = () => fileInputRef.current?.click();
+  const handleImageSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !activeConv || !socketRef.current) return;
+    if (uploadingImage) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+      setUploadError('Chỉ chấp nhận JPEG/PNG/WEBP/GIF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Ảnh vượt quá 5MB.');
+      return;
+    }
+    setUploadError(null);
+    setUploadingImage(true);
+    try {
+      const form = new FormData();
+      form.append('image', file);
+      const res = await api.post('/chat/upload-image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const url: string = res.data?.url;
+      if (!url) throw new Error('Upload thất bại.');
+      socketRef.current.emit('sendImageMessage', {
+        conversationId: activeConv.id,
+        imageUrl: url,
+        clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Không gửi được ảnh.';
+      setUploadError(typeof msg === 'string' ? msg : 'Không gửi được ảnh.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [activeConv, uploadingImage]);
 
   const respondToQuote = (messageId: string, action: 'ACCEPTED' | 'REJECTED') => {
     if (!activeConv) return;
@@ -300,7 +360,8 @@ export default function BuyerChatWidgetPanel({
           const name = getPartnerName(conv);
           const isActive = activeConv?.id === conv.id;
           const lastMsg = conv.lastMessage;
-          const showUnread = unreadConvIds.has(conv.id);
+          const unread = conv.unread_count ?? (unreadConvIds.has(conv.id) ? 1 : 0);
+          const showUnread = unread > 0 && !isActive;
 
           return (
             <button
@@ -330,7 +391,16 @@ export default function BuyerChatWidgetPanel({
                   )}
                 </div>
                 {lastMsg && (
-                  <p className="text-xs text-gray-400 truncate mt-0.5">{lastMsg.content}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className={`text-xs truncate flex-1 ${showUnread ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
+                      {lastMsg.content}
+                    </p>
+                    {showUnread && (
+                      <span className="bg-green-600 text-white text-[10px] font-black rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center flex-shrink-0">
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </button>
@@ -486,6 +556,29 @@ export default function BuyerChatWidgetPanel({
                 );
               }
 
+              // IMAGE message
+              if (msg.message_type === 'IMAGE' && (msg as any).image_url) {
+                const imgUrl = resolveImageUrl((msg as any).image_url);
+                return (
+                  <div key={msg.id || idx}>
+                    {timeChip}
+                    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-2`}>
+                      <a
+                        href={imgUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`max-w-[70%] rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-sm ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
+                      >
+                        <img src={imgUrl} alt="Anh" className="w-full h-auto max-h-64 object-cover block" loading="lazy" />
+                        {msg.message_content && (
+                          <div className="px-2.5 py-1.5 text-xs text-gray-700">{msg.message_content}</div>
+                        )}
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={msg.id || idx}>
                   {timeChip}
@@ -506,8 +599,30 @@ export default function BuyerChatWidgetPanel({
           </div>
 
           {/* Composer */}
+          {uploadError && (
+            <div className="px-3 py-1.5 bg-red-50 border-t border-red-100 text-red-700 text-xs flex items-center justify-between">
+              <span>⚠️ {uploadError}</span>
+              <button onClick={() => setUploadError(null)} className="text-red-600 hover:underline">Đóng</button>
+            </div>
+          )}
           <div className="px-3 py-3 border-t border-gray-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleImageSelected}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={handlePickImage}
+                disabled={uploadingImage}
+                className="w-10 h-10 rounded-xl text-gray-600 hover:bg-gray-100 flex items-center justify-center transition disabled:opacity-50"
+                title="Gửi ảnh"
+              >
+                {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={18} />}
+              </button>
               <input
                 ref={inputRef}
                 type="text"

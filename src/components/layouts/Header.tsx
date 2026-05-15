@@ -40,8 +40,8 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // FIX: Helper để lấy role in hoa 'SELLER'
-  const isSeller = user?.role === 'SELLER';
+  // User.is_seller là source of truth — schema dùng boolean flags, không có field `role`
+  const isSeller = !!user?.is_seller;
 
   return (
     <header className={cn(
@@ -102,12 +102,16 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
 
                 {/* 2. Phần giao diện menu (màu trắng) nằm bên trong */}
                 <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-1 overflow-hidden">
-                  <Link href={isSeller ? '/dashboard' : '/profile'} className="block px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg">
+                  <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg">
                     Hồ sơ của tôi
                   </Link>
-                  {isSeller && (
-                    <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg">
-                      Quản lý Shop
+                  {isSeller ? (
+                    <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg font-semibold">
+                      🏪 Quản lý cửa hàng
+                    </Link>
+                  ) : (
+                    <Link href="/become-seller" className="block px-4 py-2 text-sm text-green-700 hover:bg-green-50 rounded-lg font-semibold">
+                      ✨ Kênh người bán
                     </Link>
                   )}
                   <button onClick={logout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2">

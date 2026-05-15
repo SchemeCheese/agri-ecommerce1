@@ -14,14 +14,15 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
-        router.push('/login'); 
-      } else if (user.role !== 'SELLER') {
-        router.push('/'); 
+        router.push('/login');
+      } else if (!user.is_seller) {
+        // Chưa có quyền seller → về trang chủ. UI Header sẽ gợi ý đăng ký bán hàng.
+        router.push('/');
       }
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || !user || user.role !== 'SELLER') {
+  if (isLoading || !user || !user.is_seller) {
     return <div className="h-screen flex items-center justify-center">Đang tải dữ liệu...</div>;
   }
 

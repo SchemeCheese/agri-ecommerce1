@@ -1,6 +1,6 @@
 // ─── Chat / Negotiation shared TypeScript types ───────────────────────────────
 
-export type MessageType = 'TEXT' | 'SYSTEM' | 'NEGOTIATION_QUOTE';
+export type MessageType = 'TEXT' | 'IMAGE' | 'SYSTEM' | 'NEGOTIATION_QUOTE';
 export type QuoteStatus  = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 export type ConversationType = 'GENERAL' | 'NEGOTIATION' | 'AI';
 
@@ -50,6 +50,8 @@ export interface Message {
   quote_status?:       QuoteStatus;
   // Real-time socket may emit nested quote
   quote?: QuoteData | null;
+  // URL ảnh khi message_type === 'IMAGE'
+  image_url?: string | null;
 }
 
 /** Extract a normalised QuoteData from any message shape (DB flat OR socket nested). */
@@ -91,6 +93,7 @@ export interface Conversation {
     created_at:    string;
     sender_id?:    string;
   };
+  unread_count?: number;
   created_at: string;
 }
 

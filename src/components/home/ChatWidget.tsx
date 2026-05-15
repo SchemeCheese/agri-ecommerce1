@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bot,
   Maximize2,
   MessageCircle,
   Minimize2,
-  Send,
   Store,
   TicketPercent,
   X,
@@ -16,14 +15,9 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import LoginRequiredDialog from "@/components/common/LoginRequiredDialog";
 import BuyerChatWidgetPanel from "@/components/chat/BuyerChatWidgetPanel";
+import AIAssistantPanel from "@/components/ai/AIAssistantPanel";
 
 type ChatType = "none" | "human" | "bot";
-type ChatMessage = {
-  id: string;
-  from: "me" | "system";
-  text: string;
-  createdAt: number;
-};
 
 export const ChatWidget = () => {
   const router = useRouter();
@@ -36,19 +30,6 @@ export const ChatWidget = () => {
   const [activeChat, setActiveChat] = useState<ChatType>("none"); // loại chat đang mở
   const [isFullScreen, setIsFullScreen] = useState(false); // phóng to toàn màn hình
   const [showLoginRequired, setShowLoginRequired] = useState(false);
-  const [draft, setDraft] = useState("");
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const [messagesByChat, setMessagesByChat] = useState<Record<"bot", ChatMessage[]>>({
-    bot: [
-      {
-        id: "bot-welcome",
-        from: "system",
-        text: "Xin chào! Mình là AgriBot. Bạn cần hỗ trợ gì ạ?",
-        createdAt: Date.now(),
-      },
-    ],
-  });
 
   const chatTitle = useMemo(() => {
     if (activeChat === "bot") return "Trợ lý AI AgriBot";
@@ -57,8 +38,8 @@ export const ChatWidget = () => {
   }, [activeChat]);
 
   const openChat = (type: Exclude<ChatType, "none">) => {
-    // Theo yêu cầu: chat với khách hàng/shop -> bắt buộc đăng nhập
-    if (type === "human" && !isAuthenticated) {
+    // Cả 2 loại chat đều yêu cầu đăng nhập (AI cần JWT để tạo session, lịch sử)
+    if (!isAuthenticated) {
       setIsOpen(false);
       setShowLoginRequired(true);
       return;
@@ -67,36 +48,12 @@ export const ChatWidget = () => {
     setActiveChat(type);
     setIsOpen(false);
     setIsFullScreen(false);
-    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const closeChat = () => {
     setActiveChat("none");
     setIsFullScreen(false);
-    setDraft("");
   };
-
-  const onSend = () => {
-    if (activeChat !== "bot") return;
-    const text = draft.trim();
-    if (!text) return;
-
-    const newMessage: ChatMessage = {
-      id: `${activeChat}-${Date.now()}`,
-      from: "me",
-      text,
-      createdAt: Date.now(),
-    };
-
-    setMessagesByChat((prev) => ({
-      ...prev,
-      bot: [...prev.bot, newMessage],
-    }));
-    setDraft("");
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
-
-  const activeMessages = activeChat === "bot" ? messagesByChat.bot : [];
 
   return (
     <>
@@ -156,48 +113,8 @@ export const ChatWidget = () => {
                 </div>
               </div>
 
-              {/* Vùng tin nhắn */}
-              <div className="flex-1 p-4 overflow-y-auto bg-gray-50 flex flex-col gap-2">
-                {activeMessages.map((m) => (
-                  <div key={m.id} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
-                        m.from === "me"
-                          ? "bg-green-600 text-white"
-                          : "bg-white text-gray-800 border border-gray-200"
-                      }`}
-                    >
-                      {m.text}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Composer */}
-              <div className="p-4 border-t border-gray-100 bg-white">
-                <div className="flex items-center gap-2 bg-gray-50 rounded-full border border-gray-200 p-1">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    placeholder="Nhập câu hỏi..."
-                    className="flex-1 px-4 py-2 bg-transparent focus:outline-none text-sm"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") onSend();
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={onSend}
-                    className="p-2 mr-1 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors shrink-0"
-                    aria-label="Gửi"
-                    title="Gửi"
-                  >
-                    <Send size={16} />
-                  </button>
-                </div>
-              </div>
+              {/* AI Assistant panel — kết nối WS /ai-chat, stream token, lịch sử session */}
+              <AIAssistantPanel className="flex-1" />
             </>
           )}
         </div>

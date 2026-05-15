@@ -9,7 +9,7 @@ import { Container } from '@/components/ui/Container';
 import { API_BASE_URL, SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import {
   MessageCircle, Send, Search, ChevronLeft,
-  Loader2, Store, Handshake, XCircle, RotateCcw, ShoppingBag, ExternalLink
+  Loader2, Store, Handshake, XCircle, RotateCcw, ShoppingBag, ExternalLink, ImagePlus
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -79,9 +79,14 @@ function ChatPageInner() {
 
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
   // Track active conversation id for socket re-join on reconnect
   const activeConvIdRef = useRef<string | null>(null);
+  // Pagination state
+  const nextCursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
 
 
   // ── Load conversations ───────────────────────────────────────────────────
@@ -98,15 +103,44 @@ function ChatPageInner() {
     } finally { setLoadingConvs(false); }
   }, []);
 
-  // ── Load messages ────────────────────────────────────────────────────────
+  // ── Load messages (paginated; first page = newest 30) ────────────────────
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoadingMsgs(true);
     try {
-      const res = await api.get(`/chat/conversations/${conversationId}/messages`);
-      setMessages(res.data);
+      const res = await api.get(`/chat/conversations/${conversationId}/messages?limit=30`);
+      // BE shape: { items, nextCursor, hasMore }. Tương thích ngược với array cũ.
+      const payload = res.data;
+      const items = Array.isArray(payload) ? payload : payload?.items ?? [];
+      const nextCursor = Array.isArray(payload) ? null : payload?.nextCursor ?? null;
+      setMessages(items);
+      nextCursorRef.current = nextCursor;
+      setHasMoreMessages(!!nextCursor);
     } catch (err) {
       console.error('[Chat] loadMessages error:', err);
     } finally { setLoadingMsgs(false); }
+  }, []);
+
+  // ── Load more (infinite scroll lên) ─────────────────────────────────────
+  const loadMoreMessages = useCallback(async () => {
+    const conv = activeConvIdRef.current;
+    const cursor = nextCursorRef.current;
+    if (!conv || !cursor || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    try {
+      const res = await api.get(
+        `/chat/conversations/${conv}/messages?limit=30&before=${encodeURIComponent(cursor)}`,
+      );
+      const payload = res.data;
+      const items = Array.isArray(payload) ? payload : payload?.items ?? [];
+      const nextCursor = Array.isArray(payload) ? null : payload?.nextCursor ?? null;
+      setMessages((prev) => [...items, ...prev]);
+      nextCursorRef.current = nextCursor;
+      setHasMoreMessages(!!nextCursor);
+    } catch (err) {
+      console.error('[Chat] loadMoreMessages error:', err);
+    } finally {
+      loadingMoreRef.current = false;
+    }
   }, []);
 
   // ── Select conversation ──────────────────────────────────────────────────
@@ -165,17 +199,31 @@ function ChatPageInner() {
     });
     socket.on('disconnect', () => console.log('[Chat] Socket disconnected'));
 
-    socket.on('newMessage', (msg: Message) => {
+    socket.on('newMessage', (msg: Message & { conversationId?: string }) => {
       // Normalize: some older emits may use `content` instead of `message_content`
       const normalized: Message = {
         ...msg,
         message_content: (msg as any).message_content ?? (msg as any).content ?? '',
         message_type:    (msg as any).message_type ?? 'TEXT',
       };
-      setMessages(prev =>
-        prev.find(m => m.id === normalized.id) ? prev : [...prev, normalized]
-      );
+      const incomingConvId = (msg as any).conversationId;
+      const activeConvId = activeConvIdRef.current;
+      if (!incomingConvId || incomingConvId === activeConvId) {
+        setMessages(prev =>
+          prev.find(m => m.id === normalized.id) ? prev : [...prev, normalized]
+        );
+      }
     });
+
+    // Server đẩy unread count khi recipient nhận tin nhắn (hoặc khi mark-read)
+    socket.on(
+      'unreadUpdated',
+      (payload: { conversationId: string; unread: number; totalUnread: number }) => {
+        setConversations(prev =>
+          prev.map(c => c.id === payload.conversationId ? { ...c, unread_count: payload.unread } : c),
+        );
+      },
+    );
 
     // Quote status updated (works for both nested + flat quote messages)
     socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: QuoteData['status'] }) => {
@@ -279,10 +327,58 @@ function ChatPageInner() {
     socketRef.current.emit('sendMessage', {
       conversationId: activeConv.id,
       content:        inputText.trim(),
+      clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     });
     setInputText('');
     setSending(false);
   }, [inputText, activeConv]);
+
+  // ── Image upload ─────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handlePickImage = () => fileInputRef.current?.click();
+
+  const handleImageSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !activeConv || !socketRef.current) return;
+    if (uploadingImage) return;
+
+    // Validate client-side trước khi upload
+    if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+      setUploadError('Chỉ chấp nhận JPEG/PNG/WEBP/GIF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Ảnh vượt quá 5MB.');
+      return;
+    }
+
+    setUploadError(null);
+    setUploadingImage(true);
+    try {
+      const form = new FormData();
+      form.append('image', file);
+      const res = await api.post('/chat/upload-image', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const url: string = res.data?.url;
+      if (!url) throw new Error('Upload thất bại.');
+
+      socketRef.current.emit('sendImageMessage', {
+        conversationId: activeConv.id,
+        imageUrl: url,
+        clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Không gửi được ảnh.';
+      setUploadError(typeof msg === 'string' ? msg : 'Không gửi được ảnh.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [activeConv, uploadingImage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -384,9 +480,16 @@ function ChatPageInner() {
                         </div>
 
                         {lastMsg && (
-                          <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {isMyMsg ? 'Bạn: ' : ''}{lastMsg.content}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className={`text-xs truncate flex-1 ${(conv.unread_count ?? 0) > 0 && !isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
+                              {isMyMsg ? 'Bạn: ' : ''}{lastMsg.content}
+                            </p>
+                            {(conv.unread_count ?? 0) > 0 && !isActive && (
+                              <span className="bg-green-600 text-white text-[10px] font-black rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center flex-shrink-0">
+                                {conv.unread_count! > 99 ? '99+' : conv.unread_count}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </button>
@@ -520,10 +623,38 @@ function ChatPageInner() {
                   })()}
 
                   {/* Messages */}
-                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/50">
+                  <div
+                    ref={messagesScrollRef}
+                    className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/50"
+                    onScroll={(e) => {
+                      const el = e.currentTarget;
+                      if (el.scrollTop < 80 && hasMoreMessages && !loadingMoreRef.current) {
+                        const prevHeight = el.scrollHeight;
+                        loadMoreMessages().then(() => {
+                          requestAnimationFrame(() => {
+                            if (messagesScrollRef.current) {
+                              messagesScrollRef.current.scrollTop =
+                                messagesScrollRef.current.scrollHeight - prevHeight;
+                            }
+                          });
+                        });
+                      }
+                    }}
+                  >
                     {loadingMsgs && (
                       <div className="flex justify-center py-8">
                         <Loader2 className="animate-spin text-green-600" size={24}/>
+                      </div>
+                    )}
+                    {hasMoreMessages && !loadingMsgs && (
+                      <div className="text-center py-2">
+                        <button
+                          type="button"
+                          onClick={() => loadMoreMessages()}
+                          className="text-xs text-green-700 hover:underline"
+                        >
+                          ⬆ Tải tin nhắn cũ hơn
+                        </button>
                       </div>
                     )}
                     {!loadingMsgs && messages.length === 0 && (
@@ -659,6 +790,39 @@ function ChatPageInner() {
                         );
                       }
 
+                      // IMAGE message
+                      if (msg.message_type === 'IMAGE' && (msg as any).image_url) {
+                        const imgUrl = fixImg((msg as any).image_url);
+                        return (
+                          <div key={msg.id || idx}>
+                            {TimeDiv}
+                            <div className={`flex items-end gap-2 mb-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                              {!isMe && (
+                                <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs flex-shrink-0 border border-gray-100 mb-0.5">
+                                  {getPartnerName(activeConv).charAt(0)}
+                                </div>
+                              )}
+                              <a
+                                href={imgUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`max-w-[60%] rounded-2xl overflow-hidden ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'} shadow-sm border border-gray-100 bg-white`}
+                              >
+                                <img
+                                  src={imgUrl}
+                                  alt="Ảnh"
+                                  className="w-full h-auto max-h-72 object-cover block"
+                                  loading="lazy"
+                                />
+                                {msg.message_content && (
+                                  <div className="px-3 py-1.5 text-xs text-gray-700">{msg.message_content}</div>
+                                )}
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       // TEXT message
                       return (
                         <div key={msg.id || idx}>
@@ -684,7 +848,29 @@ function ChatPageInner() {
                   </div>
 
                   {/* Input */}
-                  <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center gap-3 flex-shrink-0">
+                  {uploadError && (
+                    <div className="px-4 py-1.5 bg-red-50 border-t border-red-100 text-red-700 text-xs flex items-center justify-between">
+                      <span>⚠️ {uploadError}</span>
+                      <button onClick={() => setUploadError(null)} className="text-red-600 hover:underline">Đóng</button>
+                    </div>
+                  )}
+                  <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center gap-2 flex-shrink-0">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handleImageSelected}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePickImage}
+                      disabled={uploadingImage}
+                      title="Gửi ảnh"
+                      className="p-3 text-gray-600 hover:text-green-600 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+                    >
+                      {uploadingImage ? <Loader2 className="animate-spin" size={18}/> : <ImagePlus size={18}/>}
+                    </button>
                     <input
                       ref={inputRef}
                       type="text"

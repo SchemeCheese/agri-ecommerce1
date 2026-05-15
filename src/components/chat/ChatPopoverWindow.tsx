@@ -10,7 +10,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
-import { X, Send, Loader2, MessageCircle, ChevronDown, ExternalLink } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle, ChevronDown, ExternalLink, ImagePlus } from 'lucide-react';
 import api from '@/lib/axios';
 import { formatCurrency } from '@/utils/vi';
 import { Message, extractQuote } from '@/types/chat';
@@ -86,8 +86,11 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
         socket.emit('joinRoom', { conversationId: convId });
 
         // Load existing messages; merge with any realtime that arrived during HTTP
-        const msgRes = await api.get(`/chat/conversations/${convId}/messages`);
-        const httpMsgs: Message[] = msgRes.data || [];
+        const msgRes = await api.get(`/chat/conversations/${convId}/messages?limit=30`);
+        const msgPayload = msgRes.data;
+        const httpMsgs: Message[] = Array.isArray(msgPayload)
+          ? msgPayload
+          : msgPayload?.items ?? [];
         setMessages(prev => {
           const idSet = new Set(prev.map(m => m.id));
           const extras = httpMsgs.filter(m => !idSet.has(m.id));
@@ -144,6 +147,7 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
     socketRef.current.emit('sendMessage', {
       conversationId: convId,
       content: inputText.trim(),
+      clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     });
     setInputText('');
     setSending(false);
@@ -153,6 +157,46 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  // ── Image upload ──────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const handlePickImage = () => fileInputRef.current?.click();
+  const handleImageSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const convId = convIdRef.current;
+    if (!file || !convId || !socketRef.current) return;
+    if (uploadingImage) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+      setUploadError('Chỉ chấp nhận JPEG/PNG/WEBP/GIF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Ảnh vượt quá 5MB.');
+      return;
+    }
+    setUploadError(null);
+    setUploadingImage(true);
+    try {
+      const form = new FormData();
+      form.append('image', file);
+      const res = await api.post('/chat/upload-image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const url: string = res.data?.url;
+      if (!url) throw new Error('Upload thất bại.');
+      socketRef.current.emit('sendImageMessage', {
+        conversationId: convId,
+        imageUrl: url,
+        clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Không gửi được ảnh.';
+      setUploadError(typeof msg === 'string' ? msg : 'Không gửi được ảnh.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [uploadingImage]);
 
   return (
     <div
@@ -289,6 +333,40 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
             );
           }
 
+          // IMAGE
+          if (msg.message_type === 'IMAGE' && (msg as any).image_url) {
+            const imgUrl = resolveImageUrl((msg as any).image_url);
+            return (
+              <div key={msg.id || idx}>
+                {showTime && (
+                  <div className="text-center my-2">
+                    <span className="text-[10px] text-gray-400 bg-white px-2 py-0.5 rounded-full border border-gray-100">
+                      {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )}
+                <div className={`flex items-end gap-1.5 mb-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {!isMe && (
+                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs flex-shrink-0 border border-gray-100">
+                      {shop.store_name[0]}
+                    </div>
+                  )}
+                  <a
+                    href={imgUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`max-w-[65%] rounded-2xl overflow-hidden ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'} shadow-sm border border-gray-100 bg-white`}
+                  >
+                    <img src={imgUrl} alt="Anh" className="w-full h-auto max-h-56 object-cover block" loading="lazy" />
+                    {msg.message_content && (
+                      <div className="px-2 py-1 text-xs text-gray-700">{msg.message_content}</div>
+                    )}
+                  </a>
+                </div>
+              </div>
+            );
+          }
+
           // TEXT
           return (
             <div key={msg.id || idx}>
@@ -320,7 +398,29 @@ export const ChatPopoverWindow = ({ product, shop, onClose }: Props) => {
       </div>
 
       {/* ── Input ── */}
+      {uploadError && (
+        <div className="px-3 py-1.5 bg-red-50 border-t border-red-100 text-red-700 text-[11px] flex items-center justify-between">
+          <span>⚠️ {uploadError}</span>
+          <button onClick={() => setUploadError(null)} className="text-red-600 hover:underline">Đóng</button>
+        </div>
+      )}
       <div className="px-3 py-2.5 border-t border-gray-100 bg-white flex items-center gap-2 flex-shrink-0">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={handleImageSelected}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={handlePickImage}
+          disabled={!conversationId || uploadingImage}
+          className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl flex-shrink-0 disabled:opacity-50"
+          title="Gửi ảnh"
+        >
+          {uploadingImage ? <Loader2 className="animate-spin" size={16}/> : <ImagePlus size={16}/>}
+        </button>
         <input
           ref={inputRef}
           type="text"

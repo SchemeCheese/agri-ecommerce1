@@ -8,7 +8,7 @@ import api from '@/lib/axios';
 import { API_BASE_URL, SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import {
   MessageCircle, Send, Search, ChevronLeft,
-  Loader2, ClipboardList, XCircle, RotateCcw, Bot, Handshake, ExternalLink, CheckCircle2
+  Loader2, ClipboardList, XCircle, RotateCcw, Bot, Handshake, ExternalLink, CheckCircle2, ImagePlus
 } from 'lucide-react';
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
 import { SellerQuoteForm, SellerProductOption } from '@/components/chat/SellerQuoteForm';
@@ -75,12 +75,14 @@ export default function SellerChatPage() {
     finally { setLoadingConvs(false); }
   }, []);
 
-  // ── Load messages ──────────────────────────────────────────────────
+  // ── Load messages (paginated; first page = newest 30) ─────────────
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoadingMsgs(true);
     try {
-      const res = await api.get(`/chat/conversations/${conversationId}/messages`);
-      setMessages(res.data);
+      const res = await api.get(`/chat/conversations/${conversationId}/messages?limit=30`);
+      const payload = res.data;
+      const items = Array.isArray(payload) ? payload : payload?.items ?? [];
+      setMessages(items);
     } catch { setMessages([]); }
     finally { setLoadingMsgs(false); }
   }, []);
@@ -110,7 +112,7 @@ export default function SellerChatPage() {
     });
     socket.on('disconnect', () => console.log('[SellerChat] disconnected'));
 
-    socket.on('newMessage', (msg: Message) => {
+    socket.on('newMessage', (msg: Message & { conversationId?: string }) => {
       const normalized: Message = {
         ...msg,
         message_content: (msg as any).message_content ?? (msg as any).content ?? '',
@@ -118,6 +120,16 @@ export default function SellerChatPage() {
       };
       setMessages(prev => prev.find(m => m.id === normalized.id) ? prev : [...prev, normalized]);
     });
+
+    // Unread realtime
+    socket.on(
+      'unreadUpdated',
+      (payload: { conversationId: string; unread: number; totalUnread: number }) => {
+        setConversations(prev =>
+          prev.map(c => c.id === payload.conversationId ? { ...c, unread_count: payload.unread } : c),
+        );
+      },
+    );
     socket.on('quoteUpdated', ({ messageId, status }: { messageId: string; status: QuoteData['status'] }) => {
       setMessages(prev =>
         prev.map(m => {
@@ -148,7 +160,11 @@ export default function SellerChatPage() {
   const handleSend = useCallback(() => {
     if (!inputText.trim() || !activeConv || !socketRef.current) return;
     setSending(true);
-    socketRef.current.emit('sendMessage', { conversationId: activeConv.id, content: inputText.trim() });
+    socketRef.current.emit('sendMessage', {
+      conversationId: activeConv.id,
+      content: inputText.trim(),
+      clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+    });
     setInputText('');
     setSending(false);
   }, [inputText, activeConv]);
@@ -156,6 +172,45 @@ export default function SellerChatPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  // ── Image upload ─────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const handlePickImage = () => fileInputRef.current?.click();
+  const handleImageSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !activeConv || !socketRef.current) return;
+    if (uploadingImage) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+      setUploadError('Chỉ chấp nhận JPEG/PNG/WEBP/GIF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Ảnh vượt quá 5MB.');
+      return;
+    }
+    setUploadError(null);
+    setUploadingImage(true);
+    try {
+      const form = new FormData();
+      form.append('image', file);
+      const res = await api.post('/chat/upload-image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const url: string = res.data?.url;
+      if (!url) throw new Error('Upload thất bại.');
+      socketRef.current.emit('sendImageMessage', {
+        conversationId: activeConv.id,
+        imageUrl: url,
+        clientMessageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Không gửi được ảnh.';
+      setUploadError(typeof msg === 'string' ? msg : 'Không gửi được ảnh.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [activeConv, uploadingImage]);
 
   // ── Send quote ────────────────────────────────────────────────────────────
   const handleSendQuote = (data: Omit<SendQuotePayload, 'conversationId'>) => {
@@ -263,7 +318,18 @@ export default function SellerChatPage() {
                     {lastMsg && <span className="text-xs text-gray-400 whitespace-nowrap">{formatTime(lastMsg.created_at)}</span>}
                   </div>
 
-                  {lastMsg && <p className="text-xs text-gray-400 truncate mt-0.5">{lastMsg.content}</p>}
+                  {lastMsg && (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className={`text-xs truncate flex-1 ${(conv.unread_count ?? 0) > 0 && !isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
+                        {lastMsg.content}
+                      </p>
+                      {(conv.unread_count ?? 0) > 0 && !isActive && (
+                        <span className="bg-green-600 text-white text-[10px] font-black rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center flex-shrink-0">
+                          {conv.unread_count! > 99 ? '99+' : conv.unread_count}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -524,6 +590,36 @@ export default function SellerChatPage() {
                   );
                 }
 
+                // IMAGE
+                if (msg.message_type === 'IMAGE' && (msg as any).image_url) {
+                  const imgUrl = (msg as any).image_url.startsWith('http')
+                    ? (msg as any).image_url
+                    : `${API_BASE_URL}${(msg as any).image_url}`;
+                  return (
+                    <div key={msg.id || idx}>
+                      {TimeDiv}
+                      <div className={`flex items-end gap-2 mb-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                        {!isMe && (
+                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold text-xs flex-shrink-0">
+                            {getPartnerName(activeConv).charAt(0)}
+                          </div>
+                        )}
+                        <a
+                          href={imgUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`max-w-[60%] rounded-2xl overflow-hidden ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'} shadow-sm border border-gray-100 bg-white`}
+                        >
+                          <img src={imgUrl} alt="Ảnh" className="w-full h-auto max-h-72 object-cover block" loading="lazy" />
+                          {msg.message_content && (
+                            <div className="px-3 py-1.5 text-xs text-gray-700">{msg.message_content}</div>
+                          )}
+                        </a>
+                      </div>
+                    </div>
+                  );
+                }
+
                 // TEXT
                 return (
                   <div key={msg.id || idx}>
@@ -549,6 +645,12 @@ export default function SellerChatPage() {
             </div>
 
             {/* Input */}
+            {uploadError && (
+              <div className="px-4 py-1.5 bg-red-50 border-t border-red-100 text-red-700 text-xs flex items-center justify-between">
+                <span>⚠️ {uploadError}</span>
+                <button onClick={() => setUploadError(null)} className="text-red-600 hover:underline">Đóng</button>
+              </div>
+            )}
             <div className="p-4 border-t border-gray-200 bg-white flex items-center gap-2 flex-shrink-0">
               {isNegotiationConv && !isCancelled && (
                 <button
@@ -559,6 +661,22 @@ export default function SellerChatPage() {
                   <ClipboardList size={18} />
                 </button>
               )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleImageSelected}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={handlePickImage}
+                disabled={uploadingImage}
+                className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition flex-shrink-0 disabled:opacity-50"
+                title="Gửi ảnh"
+              >
+                {uploadingImage ? <Loader2 className="animate-spin" size={18}/> : <ImagePlus size={18}/>}
+              </button>
               <input
                 ref={inputRef}
                 type="text"

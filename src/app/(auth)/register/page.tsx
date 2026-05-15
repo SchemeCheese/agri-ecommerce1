@@ -38,6 +38,15 @@ export default function RegisterPage() {
     setFormData(prev => ({ ...prev, is_buyer: role === 'buyer', is_seller: role === 'seller' }));
   };
 
+  // Password strength check khớp với BE regex
+  const passwordChecks = {
+    length: formData.password.length >= 8,
+    upper: /[A-Z]/.test(formData.password),
+    lower: /[a-z]/.test(formData.password),
+    digit: /\d/.test(formData.password),
+  };
+  const passwordStrong = Object.values(passwordChecks).every(Boolean);
+
   // --- HÀM SUBMIT BƯỚC 1: TẠO TÀI KHOẢN & NHẬN OTP ---
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +54,11 @@ export default function RegisterPage() {
 
     if (formData.password !== formData.confirmPassword) {
       showToast('Mật khẩu xác nhận không khớp!', 'error');
+      setLoading(false);
+      return;
+    }
+    if (!passwordStrong) {
+      showToast('Mật khẩu chưa đủ mạnh — cần ≥8 ký tự, có chữ hoa, chữ thường và số.', 'error');
       setLoading(false);
       return;
     }
@@ -58,15 +72,29 @@ export default function RegisterPage() {
         is_seller: formData.is_seller,
       });
 
+      // BE có 3 luồng:
+      // 1. OTP enabled + gửi OK → emailSent=true → step 2 (nhập OTP)
+      // 2. OTP disabled → autoVerified=true → bỏ qua step 2, redirect login
+      // 3. OTP enabled nhưng gửi fail + BYPASS_OTP_ON_ERROR → autoVerified=true
+      if (response.data.autoVerified) {
+        showToast(response.data.message || 'Tài khoản đã kích hoạt. Vui lòng đăng nhập.', 'success');
+        setTimeout(() => router.push('/login'), 1200);
+        return;
+      }
+
       setUserId(response.data.userId);
       showToast('Mã OTP đã được gửi đến Email của bạn!', 'success');
       setStep(2);
 
     } catch (error: any) {
-      if (error.response?.status === 409 || error.response?.status === 400) {
-        showToast(error.response?.data?.message || 'Email này đã được sử dụng.', 'error');
+      const status = error.response?.status;
+      const msg = error.response?.data?.message;
+      if (status === 409 || status === 400) {
+        showToast(msg || 'Thông tin đăng ký không hợp lệ.', 'error');
+      } else if (status === 503) {
+        showToast('Hệ thống email tạm thời lỗi. Vui lòng thử lại sau ít phút hoặc liên hệ admin.', 'error');
       } else {
-        showToast('Đăng ký thất bại. Vui lòng thử lại.', 'error');
+        showToast(msg || 'Đăng ký thất bại. Vui lòng thử lại.', 'error');
       }
     } finally {
       setLoading(false);
@@ -164,8 +192,26 @@ export default function RegisterPage() {
               <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Mail size={20} /></div>
                 <input name="email" type="email" required placeholder="Địa chỉ Email" className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />
               </div>
-              <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={20} /></div>
-                <input name="password" type="password" required minLength={6} placeholder="Mật khẩu (ít nhất 6 ký tự)" className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />
+              <div>
+                <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={20} /></div>
+                  <input name="password" type="password" required minLength={8} placeholder="Mật khẩu (≥8 ký tự, có chữ hoa, chữ thường và số)" value={formData.password} className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />
+                </div>
+                {formData.password.length > 0 && (
+                  <div className="mt-1.5 text-[11px] grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    <span className={passwordChecks.length ? 'text-green-600' : 'text-gray-400'}>
+                      {passwordChecks.length ? '✓' : '○'} ≥8 ký tự
+                    </span>
+                    <span className={passwordChecks.upper ? 'text-green-600' : 'text-gray-400'}>
+                      {passwordChecks.upper ? '✓' : '○'} 1 chữ hoa
+                    </span>
+                    <span className={passwordChecks.lower ? 'text-green-600' : 'text-gray-400'}>
+                      {passwordChecks.lower ? '✓' : '○'} 1 chữ thường
+                    </span>
+                    <span className={passwordChecks.digit ? 'text-green-600' : 'text-gray-400'}>
+                      {passwordChecks.digit ? '✓' : '○'} 1 chữ số
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><CheckCircle size={20} /></div>
                 <input name="confirmPassword" type="password" required placeholder="Nhập lại mật khẩu" className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />

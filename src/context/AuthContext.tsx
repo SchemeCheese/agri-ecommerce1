@@ -24,6 +24,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<User | null>;
   loginWithGoogle: (role: GoogleAuthRole) => Promise<{ message: string; user?: User }>;
   registerWithGoogle: (role: GoogleAuthRole) => Promise<{ message: string; user?: User }>;
+  becomeSeller: () => Promise<User | null>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -97,6 +98,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const loginWithGoogle = (role: GoogleAuthRole) => authenticateGoogle('login', role);
   const registerWithGoogle = (role: GoogleAuthRole) => authenticateGoogle('register', role);
 
+  // Nâng cấp tài khoản hiện tại thành seller. BE trả về JWT mới (chứa is_seller=true)
+  // → ghi đè token + user trong localStorage để các request sau dùng quyền seller ngay.
+  const becomeSeller = async (): Promise<User | null> => {
+    try {
+      const response = await api.post('/auth/become-seller');
+      const { access_token, user: updated } = response.data;
+      if (access_token) localStorage.setItem('access_token', access_token);
+      if (updated) {
+        localStorage.setItem('agri_user', JSON.stringify(updated));
+        setUser(updated);
+        return updated;
+      }
+      return null;
+    } catch (err) {
+      console.error('becomeSeller error:', err);
+      return null;
+    }
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('agri_user');
@@ -106,7 +126,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, registerWithGoogle, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, registerWithGoogle, becomeSeller, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

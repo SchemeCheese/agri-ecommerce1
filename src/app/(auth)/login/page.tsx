@@ -19,6 +19,16 @@ function LoginContent() {
   const [selectedRole, setSelectedRole] = useState<'BUYER' | 'SELLER'>('BUYER');
   const [loading, setLoading] = useState(false);
 
+  // Điều hướng theo role: SELLER → /dashboard, BUYER (hoặc cả 2) → /
+  // Nếu user có cả 2, dùng selectedRole (vai trò user vừa chọn tab) làm "active mode".
+  const resolveLandingPath = (u: { is_buyer: boolean; is_seller: boolean }) => {
+    if (selectedRole === 'SELLER' && u.is_seller) return '/dashboard';
+    if (selectedRole === 'BUYER' && u.is_buyer) return '/';
+    // Fallback theo cờ thật
+    if (u.is_seller && !u.is_buyer) return '/dashboard';
+    return '/';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -26,10 +36,14 @@ function LoginContent() {
     const loggedUser = await login(formData.email, formData.password);
 
     if (loggedUser) {
-      showToast('Đăng nhập thành công! Đang chuyển hướng đến trang chính...', 'success');
-      setTimeout(() => {
-        router.push('/');
-      }, 1200);
+      // Nếu user chọn login as SELLER nhưng tài khoản chưa có quyền → cảnh báo
+      if (selectedRole === 'SELLER' && !loggedUser.is_seller) {
+        showToast('Tài khoản này chưa có quyền bán hàng. Đăng ký bán hàng trong trang Hồ sơ.', 'error');
+        setTimeout(() => router.push('/'), 1500);
+      } else {
+        showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
+        setTimeout(() => router.push(resolveLandingPath(loggedUser)), 1200);
+      }
     } else {
       showToast('Email hoặc mật khẩu không chính xác!', 'error');
       setLoading(false);
@@ -41,7 +55,9 @@ function LoginContent() {
     try {
       const result = await loginWithGoogle(selectedRole);
       showToast(result.message || 'Đăng nhập Google thành công!', 'success');
-      setTimeout(() => router.push('/'), 1200);
+      const u = result.user;
+      const path = u ? resolveLandingPath(u) : '/';
+      setTimeout(() => router.push(path), 1200);
     } catch (error: any) {
       showToast(error.response?.data?.message || error.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.', 'error');
       setLoading(false);
