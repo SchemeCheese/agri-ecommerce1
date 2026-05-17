@@ -54,11 +54,17 @@ function LoginContent() {
     setLoading(true);
     try {
       const result = await loginWithGoogle(selectedRole);
+      console.log('[LOGIN] loginWithGoogle resolved', result);
       showToast(result.message || 'Đăng nhập Google thành công!', 'success');
       const u = result.user;
       const path = u ? resolveLandingPath(u) : '/';
-      setTimeout(() => router.push(path), 1200);
+      console.log(`[LOGIN] scheduling redirect to ${path} in 1200ms`);
+      setTimeout(() => {
+        console.log(`[LOGIN] router.push(${path}) firing now`);
+        router.push(path);
+      }, 1200);
     } catch (error: any) {
+      console.error('[LOGIN] handleGoogleLogin caught', error?.response?.status, error?.response?.data ?? error?.message);
       showToast(error.response?.data?.message || error.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.', 'error');
       setLoading(false);
     }

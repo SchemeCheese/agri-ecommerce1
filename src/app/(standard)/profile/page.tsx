@@ -267,7 +267,7 @@ export default function ProfilePage() {
               <h2 className="font-bold text-gray-900 text-base line-clamp-1">{user?.full_name}</h2>
               <p className="text-gray-400 text-sm mt-0.5 truncate">{user?.email}</p>
               <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-100">
-                {user?.role === 'SELLER' ? <><Store size={11}/> Nhà vườn</> : <><Shield size={11}/> Khách hàng</>}
+                {user?.is_seller ? <><Store size={11}/> Nhà vườn</> : <><Shield size={11}/> Khách hàng</>}
               </span>
             </div>
 
@@ -382,7 +382,7 @@ export default function ProfilePage() {
                       <div>
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1.5">Vai trò</label>
                         <div className="px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-500 font-medium">
-                          {user?.role === 'SELLER' ? 'Nhà vườn / Người bán' : 'Khách hàng'}
+                          {user?.is_seller ? 'Nhà vườn / Người bán' : 'Khách hàng'}
                         </div>
                       </div>
                     </div>
@@ -391,7 +391,7 @@ export default function ProfilePage() {
                       <InfoField icon={<User size={15}/>}   label="Họ và tên"     value={user?.full_name} />
                       <InfoField icon={<Mail size={15}/>}   label="Email"          value={user?.email} />
                       <InfoField icon={<Phone size={15}/>}  label="Số điện thoại" value={profileUser?.phone_number} />
-                      <InfoField icon={<Shield size={15}/>} label="Vai trò"        value={user?.role === 'SELLER' ? 'Nhà vườn / Người bán' : 'Khách hàng'} />
+                      <InfoField icon={<Shield size={15}/>} label="Vai trò"        value={user?.is_seller ? 'Nhà vườn / Người bán' : 'Khách hàng'} />
                     </div>
                   )}
                 </div>

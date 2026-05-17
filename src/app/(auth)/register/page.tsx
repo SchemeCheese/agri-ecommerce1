@@ -58,7 +58,16 @@ export default function RegisterPage() {
       return;
     }
     if (!passwordStrong) {
-      showToast('Mật khẩu chưa đủ mạnh — cần ≥8 ký tự, có chữ hoa, chữ thường và số.', 'error');
+      showToast(
+        'Mật khẩu chưa đủ mạnh',
+        'error',
+        [
+          { label: 'Tối thiểu 8 ký tự', ok: passwordChecks.length },
+          { label: 'Có chữ HOA (A–Z)', ok: passwordChecks.upper },
+          { label: 'Có chữ thường (a–z)', ok: passwordChecks.lower },
+          { label: 'Có chữ số (0–9)', ok: passwordChecks.digit },
+        ],
+      );
       setLoading(false);
       return;
     }
@@ -192,26 +201,8 @@ export default function RegisterPage() {
               <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Mail size={20} /></div>
                 <input name="email" type="email" required placeholder="Địa chỉ Email" className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />
               </div>
-              <div>
-                <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={20} /></div>
-                  <input name="password" type="password" required minLength={8} placeholder="Mật khẩu (≥8 ký tự, có chữ hoa, chữ thường và số)" value={formData.password} className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />
-                </div>
-                {formData.password.length > 0 && (
-                  <div className="mt-1.5 text-[11px] grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    <span className={passwordChecks.length ? 'text-green-600' : 'text-gray-400'}>
-                      {passwordChecks.length ? '✓' : '○'} ≥8 ký tự
-                    </span>
-                    <span className={passwordChecks.upper ? 'text-green-600' : 'text-gray-400'}>
-                      {passwordChecks.upper ? '✓' : '○'} 1 chữ hoa
-                    </span>
-                    <span className={passwordChecks.lower ? 'text-green-600' : 'text-gray-400'}>
-                      {passwordChecks.lower ? '✓' : '○'} 1 chữ thường
-                    </span>
-                    <span className={passwordChecks.digit ? 'text-green-600' : 'text-gray-400'}>
-                      {passwordChecks.digit ? '✓' : '○'} 1 chữ số
-                    </span>
-                  </div>
-                )}
+              <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={20} /></div>
+                <input name="password" type="password" required minLength={8} placeholder="Mật khẩu (≥8 ký tự, có chữ hoa, thường, số)" value={formData.password} className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />
               </div>
               <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><CheckCircle size={20} /></div>
                 <input name="confirmPassword" type="password" required placeholder="Nhập lại mật khẩu" className="pl-10 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" onChange={handleChange} />

@@ -42,7 +42,7 @@ export default function HeaderSecondary({ title }: HeaderSecondaryProps) {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  const isSeller = user?.role === 'SELLER';
+  const isSeller = !!user?.is_seller;
 
   const logoSrc = LOGO_DARK;
 
