@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import api from '@/lib/axios';
 
+export type ProductStatus = 'ACTIVE' | 'OUT_OF_STOCK' | 'INACTIVE' | 'DELETED';
+
 export interface SellerProduct {
   id: string;
   name: string;
@@ -15,6 +17,7 @@ export interface SellerProduct {
   rating?: number;
   sold?: number;
   is_active?: boolean;
+  status?: ProductStatus;
   created_at: string;
   /** null = không cho phép thương lượng; > 0 = ngưỡng tối thiểu */
   min_negotiation_qty?: number | null;
@@ -96,9 +99,29 @@ export function useSellerProducts() {
     return res.data;
   };
 
+  // Soft-delete — BE flips status to DELETED, row stays. We refresh so the
+  // card disappears from the default "active" view but is still in the table
+  // when seller filters by status=DELETED.
   const deleteProduct = async (id: string) => {
-    await api.delete(`/products/${id}`);
-    setProducts(prev => prev.filter(p => p.id !== id));
+    await api.delete(`/seller/products/${id}`);
+    await fetchProducts();
+  };
+
+  // Top up stock and auto-reactivate. Pass either { stock } (absolute) or { add }.
+  const restockProduct = async (
+    id: string,
+    body: { stock?: number; add?: number },
+  ) => {
+    const res = await api.patch(`/seller/products/${id}/restock`, body);
+    await fetchProducts();
+    return res.data;
+  };
+
+  // Manual lifecycle switch — used for INACTIVE ↔ ACTIVE and Restore from DELETED.
+  const setProductStatus = async (id: string, status: ProductStatus) => {
+    const res = await api.patch(`/seller/products/${id}/status`, { status });
+    await fetchProducts();
+    return res.data;
   };
 
   const fetchProductById = async (id: string): Promise<SellerProduct> => {
@@ -114,6 +137,8 @@ export function useSellerProducts() {
     createProduct,
     updateProduct,
     deleteProduct,
+    restockProduct,
+    setProductStatus,
     fetchProductById,
     setProducts,
   };

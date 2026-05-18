@@ -1,6 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '@/lib/axios';
-import { resolveBackendUrl } from '@/lib/runtime-config';
+import { API_BASE_URL, resolveBackendUrl } from '@/lib/runtime-config';
+
+export const MAX_SHOP_BANNERS = 3;
+
+export interface SellerShopBanner {
+  /** Raw path the BE stores in Profile.banners1 (e.g. /uploads/avatars/xxx.png). */
+  raw: string;
+  /** Absolute URL ready for <Image src=...>. */
+  url: string;
+}
 
 export interface SellerShopProfile {
   id: string;
@@ -10,10 +19,30 @@ export interface SellerShopProfile {
   store_phone?: string;
   avatar_url?: string;
   banner_url?: string;
+  /** Carousel banners (max 3) — shown between info and products on the buyer shop page. */
+  banners: SellerShopBanner[];
   rating?: number;
   total_products?: number;
   total_orders?: number;
   created_at?: string;
+
+  // ─── Shop location (Google Maps) ────────────────────────────────────────
+  shop_location_name?: string;
+  shop_google_maps_url?: string;
+  shop_latitude?: number | null;
+  shop_longitude?: number | null;
+  shop_maps_open_url?: string | null;
+}
+
+export interface ShopUpdatePayload {
+  store_name?: string;
+  store_description?: string;
+  store_address?: string;
+  store_phone?: string;
+  shop_location_name?: string;
+  shop_google_maps_url?: string;
+  shop_latitude?: number | null;
+  shop_longitude?: number | null;
 }
 
 export function useSellerShop() {
@@ -26,19 +55,26 @@ export function useSellerShop() {
     setLoading(true);
     setError(null);
     try {
-      // GET /profile/me — dùng chung endpoint profile
       const res = await api.get('/profile/me');
       const d = res.data;
+      const p = d.profile ?? {};
+      const rawBanners: string[] = Array.isArray(p.banners1) ? p.banners1.slice(0, MAX_SHOP_BANNERS) : [];
       setShop({
-        id:                d.id,
-        store_name:        d.profile?.store_name        || d.full_name || '',
-        store_description: d.profile?.description       || '',
-        store_address:     d.profile?.address           || '',
-        store_phone:       d.phone_number               || '',
+        id:                   d.id,
+        store_name:           p.store_name        || d.full_name || '',
+        store_description:    p.description       || '',
+        store_address:        p.address           || '',
+        store_phone:          d.phone_number      || '',
         // Guard: if BE already returns a full URL, don't double-prefix
-        avatar_url:        resolveBackendUrl(d.avatar),
-        banner_url:        d.profile?.banner_url        || '',
-        rating:            d.profile?.rating            || 0,
+        avatar_url:           resolveBackendUrl(d.avatar),
+        banner_url:           p.cover_url         || '',
+        banners:              rawBanners.map((raw) => ({ raw, url: resolveBackendUrl(raw) })),
+        rating:               p.rating            || 0,
+        shop_location_name:   p.shop_location_name   || '',
+        shop_google_maps_url: p.shop_google_maps_url || '',
+        shop_latitude:        p.shop_latitude ?? null,
+        shop_longitude:       p.shop_longitude ?? null,
+        shop_maps_open_url:   p.shop_maps_open_url ?? null,
       });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Lỗi khi tải thông tin shop');
@@ -47,21 +83,28 @@ export function useSellerShop() {
     }
   }, []);
 
-  // Auto-fetch khi hook mount
   useEffect(() => { fetchShop(); }, [fetchShop]);
 
-  const updateShop = async (data: Partial<SellerShopProfile>, avatarFile?: File, _bannerFile?: File) => {
+  const updateShop = async (
+    data: ShopUpdatePayload,
+    avatarFile?: File,
+  ) => {
     setSaving(true);
     try {
-      // PATCH /profile/me nhận JSON
-      await api.patch('/profile/me', {
-        ...(data.store_name        && { store_name:  data.store_name }),
-        ...(data.store_description && { description: data.store_description }),
-        ...(data.store_address     && { address:     data.store_address }),
-        ...(data.store_phone       && { phone_number: data.store_phone }),
-      });
+      // Translate FE form keys → BE DTO keys. We pass through empty strings
+      // for store_address / shop_google_maps_url so the seller can clear them.
+      const payload: Record<string, any> = {};
+      if (data.store_name !== undefined)           payload.store_name           = data.store_name;
+      if (data.store_description !== undefined)    payload.description          = data.store_description;
+      if (data.store_address !== undefined)        payload.address              = data.store_address;
+      if (data.store_phone !== undefined)          payload.phone_number         = data.store_phone;
+      if (data.shop_location_name !== undefined)   payload.shop_location_name   = data.shop_location_name;
+      if (data.shop_google_maps_url !== undefined) payload.shop_google_maps_url = data.shop_google_maps_url;
+      if (data.shop_latitude !== undefined)        payload.shop_latitude        = data.shop_latitude;
+      if (data.shop_longitude !== undefined)       payload.shop_longitude       = data.shop_longitude;
 
-      // Upload avatar riêng nếu có
+      await api.patch('/profile/me', payload);
+
       if (avatarFile) {
         const fd = new FormData();
         fd.append('file', avatarFile);
@@ -69,11 +112,10 @@ export function useSellerShop() {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (av.data?.avatar) {
-          setShop(prev => prev ? { ...prev, avatar_url: resolveBackendUrl(av.data.avatar) } : prev);
+          setShop((prev) => prev ? { ...prev, avatar_url: resolveBackendUrl(av.data.avatar) } : prev);
         }
       }
 
-      // Refresh toàn bộ
       await fetchShop();
     } catch (err: any) {
       throw new Error(err.response?.data?.message || 'Lỗi khi cập nhật shop');
@@ -82,5 +124,37 @@ export function useSellerShop() {
     }
   };
 
-  return { shop, loading, saving, error, fetchShop, updateShop, setShop };
+  // ─── Banner manager ─────────────────────────────────────────────────────
+  // The BE caps Profile.banners1 at 3. We pre-check on the FE so the seller
+  // gets immediate feedback instead of a 400 round-trip.
+  const addBanner = async (file: File) => {
+    if ((shop?.banners.length ?? 0) >= MAX_SHOP_BANNERS) {
+      throw new Error(`Tối đa ${MAX_SHOP_BANNERS} banner.`);
+    }
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      await api.post('/profile/me/banners', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      await fetchShop();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || 'Lỗi khi tải banner.');
+    }
+  };
+
+  const removeBanner = async (banner: SellerShopBanner) => {
+    // BE stores relative paths; if we somehow have an absolute URL, strip the API base.
+    const raw = banner.raw.startsWith(API_BASE_URL)
+      ? banner.raw.slice(API_BASE_URL.length)
+      : banner.raw;
+    try {
+      await api.delete('/profile/me/banners', { data: { url: raw } });
+      await fetchShop();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || 'Lỗi khi xóa banner.');
+    }
+  };
+
+  return { shop, loading, saving, error, fetchShop, updateShop, addBanner, removeBanner, setShop };
 }

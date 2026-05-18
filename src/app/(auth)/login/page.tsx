@@ -64,6 +64,14 @@ function LoginContent() {
         router.push(path);
       }, 1200);
     } catch (error: any) {
+      // User-initiated popup dismissal — not a real error. Firebase throws this
+      // when the user closes the OAuth window or fires a second popup request
+      // before the first resolves. Stay silent in both cases.
+      const code = error?.code ?? error?.cause?.code;
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setLoading(false);
+        return;
+      }
       console.error('[LOGIN] handleGoogleLogin caught', error?.response?.status, error?.response?.data ?? error?.message);
       showToast(error.response?.data?.message || error.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.', 'error');
       setLoading(false);

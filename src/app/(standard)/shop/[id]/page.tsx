@@ -36,13 +36,22 @@ export default async function ShopDetailPage({ params }: { params: Promise<{ id:
       avatar: shopInfo.avatar_url || shopInfo.avatar || '',
       banner: shopInfo.banner_url || shopInfo.banner || '',
       description: shopInfo.store_description || shopInfo.description || '',
+      // `location` is the legacy alias; `address` is the raw column value.
+      // Both are forwarded so ShopClient can honor the spec priority chain literally.
       location: shopInfo.store_address || shopInfo.address || shopInfo.location || '',
+      address: shopInfo.address || shopInfo.store_address || '',
       isVerified: shopInfo.isVerified ?? shopInfo.is_verified ?? false,
       rating: shopInfo.avg_rating ?? data.averageRating ?? 5,
       totalSold: shopInfo.total_sales ?? data.totalSold ?? 0,
       responseRate: '100%',
       totalProducts: shopProducts.length,
       joinDate: shopInfo.joinDate || '',
+      // ─── Shop location / Google Maps (resolved server-side by BE) ──────
+      shop_location_name: shopInfo.shop_location_name ?? '',
+      shop_google_maps_url: shopInfo.shop_google_maps_url ?? '',
+      shop_maps_open_url: shopInfo.shop_maps_open_url ?? '',
+      // ─── Carousel banners (BE caps at 3, paths are relative) ───────────
+      banners: Array.isArray(shopInfo.banners) ? shopInfo.banners.slice(0, 3) : [],
     };
 
     return (

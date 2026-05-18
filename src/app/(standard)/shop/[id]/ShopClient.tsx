@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
+import Autoplay from 'embla-carousel-autoplay';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
-import { 
-  UserPlus, MessageCircle, Star, MapPin, 
+import {
+  UserPlus, MessageCircle, Star, MapPin,
   Store, Clock, Ticket, Filter, LayoutGrid, Tag, CheckCircle2, Loader2
 } from 'lucide-react';
 import {
@@ -23,6 +24,23 @@ const fixImg = (url: string) => resolveBackendUrl(url);
 interface ShopClientProps {
   shop: any;
   products: any[];
+}
+
+// Defensive: a `http(s)://` value that ended up in the address field is not
+// a human-readable label — skip it so we never show a raw URL as the location.
+const isUrlLike = (v: unknown) => typeof v === 'string' && /^https?:\/\//i.test(v.trim());
+const cleanLabel = (v: unknown) =>
+  typeof v === 'string' && v.trim() && !isUrlLike(v) ? v.trim() : '';
+
+// Display priority for the buyer-facing location row.
+//   shop_location_name → location (alias for address) → address → 'Xem vị trí'
+function pickLocationLabel(shop: any): string {
+  return (
+    cleanLabel(shop?.shop_location_name) ||
+    cleanLabel(shop?.location) ||
+    cleanLabel(shop?.address) ||
+    'Xem vị trí'
+  );
 }
 
 export default function ShopClient({ shop, products }: ShopClientProps) {
@@ -127,11 +145,26 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
                 <StatItem icon={<Star size={18}/>} label="Đánh giá" value={`${shop.rating} / 5.0`} />
                 <StatItem icon={<MessageCircle size={18}/>} label="Phản hồi Chat" value={shop.responseRate} />
                 <StatItem icon={<Clock size={18}/>} label="Tham gia" value={shop.joinDate} />
-                <StatItem icon={<MapPin size={18}/>} label="Địa chỉ" value={shop.location} isFull />
+                <StatItem
+                  icon={<MapPin size={18}/>}
+                  label="Địa chỉ"
+                  // Display priority: shop_location_name → location → address → "Xem vị trí".
+                  // pickLocationLabel skips URL-shaped values so a raw maps link in the
+                  // address column never leaks into the visible text.
+                  value={pickLocationLabel(shop)}
+                  isFull
+                  // BE pre-computes shop_maps_open_url: explicit URL → lat/lng → address search.
+                  // Falls back to text-only rendering if no map data is available.
+                  href={shop.shop_maps_open_url || undefined}
+                />
+
             </div>
           </div>
         </div>
       </div>
+
+      {/* --- PHẦN 1b: BANNER CAROUSEL (shadcn + autoplay, max 3) --- */}
+      <ShopBannerCarousel banners={shop.banners} />
 
       {/* --- PHẦN 2: VOUCHER SHOP (real data) --- */}
       {vouchers.length > 0 && (
@@ -202,12 +235,7 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
         </div>
       </ProductSection>
 
-      {/* --- PHẦN 4: BANNER 1 --- */}
-      {shop.banners && shop.banners.length > 0 && (
-        <div className="rounded-xl overflow-hidden shadow-sm">
-           <ShopBanner images={shop.banners} />
-        </div>
-      )}
+      {/* PHẦN 4 (BANNER 1) đã được thay thế bởi ShopBannerCarousel ở trên. */}
 
       {/* --- PHẦN 5: SẢN PHẨM BÁN CHẠY --- */}
       <ProductSection title="Sản phẩm bán chạy" subtitle="Top sản phẩm hot nhất tại shop">
@@ -294,16 +322,41 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
 
 // --- HELPER COMPONENTS ---
 
-// 1. Hiển thị 1 chỉ số thống kê (Stat)
-const StatItem = ({ icon, label, value, isFull = false }: any) => (
-  <div className={`flex items-center gap-3 ${isFull ? 'col-span-2' : ''}`}>
-    <div className="text-gray-400">{icon}</div>
-    <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-bold text-green-700 truncate">{value}</p>
+// 1. Hiển thị 1 chỉ số thống kê (Stat). Renders as an external link when `href`
+//    is provided — used to open the seller's Google Maps location in a new tab.
+const StatItem = ({ icon, label, value, isFull = false, href }: any) => {
+  const body = (
+    <>
+      <div className={`${href ? 'text-green-600 group-hover:text-green-700' : 'text-gray-400'}`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className={`text-sm font-bold truncate ${href ? 'text-green-700 group-hover:underline' : 'text-green-700'}`}>
+          {value}
+        </p>
+      </div>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`group flex items-center gap-3 ${isFull ? 'col-span-2' : ''} cursor-pointer`}
+        title="Mở Google Maps"
+      >
+        {body}
+      </a>
+    );
+  }
+
+  return (
+    <div className={`flex items-center gap-3 ${isFull ? 'col-span-2' : ''}`}>
+      {body}
     </div>
-  </div>
-);
+  );
+};
 
 // 2. Khung Section có Title
 const ProductSection = ({ title, subtitle, children }: any) => (
@@ -332,6 +385,46 @@ const ShopBanner = ({ images }: { images: string[] }) => (
     <CarouselNext className="right-4 bg-white/50 hover:bg-white text-gray-800 border-none" />
   </Carousel>
 );
+
+// 3b. Shop banners carousel — autoplay every 4s. Renders between the shop
+//     info card and the product sections. Falls back to:
+//       • nothing (empty banners[])
+//       • a static image (single banner — no loop / no arrows)
+//       • full carousel with arrows + autoplay (≥ 2 banners)
+const ShopBannerCarousel = ({ banners }: { banners: string[] }) => {
+  // Stable autoplay plugin instance — useRef so we don't re-create on every render.
+  const autoplay = useRef(Autoplay({ delay: 4000, stopOnInteraction: false }));
+
+  const resolved = useMemo(() => banners.filter(Boolean).map(fixImg).filter(Boolean), [banners]);
+
+  if (resolved.length === 0) return null;
+
+  if (resolved.length === 1) {
+    return (
+      <div className="rounded-xl overflow-hidden shadow-sm">
+        <div className="relative w-full h-[180px] sm:h-[240px] md:h-[320px]">
+          <Image src={resolved[0]} alt="Shop banner" fill className="object-cover" priority />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Carousel className="w-full" opts={{ loop: true }} plugins={[autoplay.current]}>
+      <CarouselContent>
+        {resolved.map((img, idx) => (
+          <CarouselItem key={`${img}-${idx}`}>
+            <div className="relative w-full h-[180px] sm:h-[240px] md:h-[320px] rounded-xl overflow-hidden shadow-sm">
+              <Image src={img} alt={`Shop banner ${idx + 1}`} fill className="object-cover" priority={idx === 0} />
+            </div>
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <CarouselPrevious className="left-3 bg-white/70 hover:bg-white text-gray-800 border-none" />
+      <CarouselNext className="right-3 bg-white/70 hover:bg-white text-gray-800 border-none" />
+    </Carousel>
+  );
+};
 
 // 4. Helper map data để dùng lại component ProductCard cũ
 const mapProductToCard = (p: any) => ({
