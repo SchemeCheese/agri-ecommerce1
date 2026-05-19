@@ -13,6 +13,14 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import QRCode from 'react-qr-code';
+
+// MoMo's `qrCodeUrl` is sometimes a real image URL (https://...) and sometimes a
+// deep link (momo://app?...). Only the former is renderable by <Image>; the
+// latter must be re-encoded into a QR code on the client. http://-prefixed URLs
+// also valid for <Image> when the host is in next.config remotePatterns.
+const isHttpImageUrl = (v: unknown): v is string =>
+  typeof v === 'string' && /^https?:\/\//i.test(v);
 
 export default function CheckoutPage() {
   return (
@@ -36,6 +44,58 @@ function CheckoutPageInner() {
     deeplink?: string;
     qrCodeUrl?: string;
   } | null>(null);
+  const [momoSimBusy, setMomoSimBusy] = useState(false);
+  const [momoStatusMsg, setMomoStatusMsg] = useState<string>('');
+
+  // Auto-poll trạng thái thanh toán MoMo sau khi popup mở.
+  // Khi BE thấy Payment.status = PAID (do IPN thật hoặc simulator), đóng popup
+  // và redirect sang trang đơn hàng — buyer không phải tự bấm "Xem đơn hàng".
+  useEffect(() => {
+    if (!momoPayment?.orderId) return;
+    let cancelled = false;
+    setMomoStatusMsg('');
+    const tick = async () => {
+      try {
+        const res = await api.get(`/payments/momo/status/${momoPayment.orderId}`);
+        if (cancelled) return;
+        if (res.data?.paymentStatus === 'PAID') {
+          // Match the real-MoMo flow: real flow's /payments/momo/return redirects
+          // browser to /payment/success; simulator path mimics that so UX is identical.
+          // router.replace so back-button doesn't return user to /checkout.
+          const orderId = momoPayment.orderId;
+          const amount = momoPayment.amount;
+          setMomoPayment(null);
+          router.replace(`/payment/success?orderId=${orderId}&amount=${amount}`);
+          return; // stop polling
+        }
+        if (res.data?.paymentStatus === 'FAILED') {
+          const orderId = momoPayment.orderId;
+          setMomoPayment(null);
+          router.replace(`/payment/failed?orderId=${orderId}&reason=payment_failed`);
+          return;
+        }
+      } catch {
+        // network blip — keep polling
+      }
+      if (!cancelled) setTimeout(tick, 2500);
+    };
+    tick();
+    return () => { cancelled = true; };
+  }, [momoPayment?.orderId, momoPayment?.amount, router]);
+
+  const handleSimulateMomoSuccess = async () => {
+    if (!momoPayment) return;
+    setMomoSimBusy(true);
+    try {
+      await api.post(`/payments/momo/simulate-success/${momoPayment.orderId}`);
+      // Polling effect will pick up the PAID flip on its next tick.
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Simulator lỗi';
+      setMomoStatusMsg(`Simulator lỗi: ${msg}`);
+    } finally {
+      setMomoSimBusy(false);
+    }
+  };
 
   // Voucher: per-shop state
   type ShopVoucher = { inputCode: string; code: string; discount_amount: number; isValidating: boolean; error: string };
@@ -222,74 +282,65 @@ function CheckoutPageInner() {
 
       {momoPayment && (
         <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4 relative">
+          {/* Minimalist popup — chỉ amount + QR. Polling effect tự redirect sang
+              /payment/success khi BE nhận PAID (qua real IPN hoặc DEV simulator). */}
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl p-6 relative">
             <button
-              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-3 text-gray-300 hover:text-gray-500"
               onClick={() => setMomoPayment(null)}
+              aria-label="Đóng"
             >
               <X size={18} />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="bg-pink-100 text-pink-600 p-2 rounded-lg"><Wallet size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">Thanh toán MoMo</p>
-                <p className="font-semibold text-gray-900">Đơn #{momoPayment.orderId}</p>
-              </div>
-            </div>
 
-            <div className="rounded-xl bg-gray-50 p-4 text-center space-y-2">
-              <p className="text-sm text-gray-600">Số tiền cần thanh toán</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="text-center mb-4">
+              <p className="text-sm text-gray-500">Số tiền cần thanh toán</p>
+              <p className="text-3xl font-bold text-pink-600 mt-1">
                 {momoPayment.amount.toLocaleString('vi-VN')} đ
               </p>
             </div>
 
-            {momoPayment.qrCodeUrl ? (
-              <div className="flex flex-col items-center gap-3">
+            <div className="flex justify-center">
+              {isHttpImageUrl(momoPayment.qrCodeUrl) ? (
+                // Production: MoMo trả qrCodeUrl là PNG https — render thẳng.
                 <div className="bg-white border border-gray-200 rounded-xl p-3">
                   <Image src={momoPayment.qrCodeUrl} alt="MoMo QR" width={240} height={240} />
                 </div>
-                <p className="text-sm text-gray-500 text-center">Quét QR bằng ứng dụng MoMo để hoàn tất thanh toán</p>
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 text-center">
-                Không nhận được QR từ MoMo. Vui lòng mở liên kết thanh toán.
-              </div>
+              ) : (momoPayment.qrCodeUrl ?? momoPayment.deeplink ?? momoPayment.payUrl) ? (
+                // UAT/sandbox: ưu tiên qrCodeUrl (momo:// deeplink) — UAT app trên
+                // phone scan trực tiếp, thanh toán bằng tiền ảo, không cần cài app
+                // MoMo phổ thông trên Play Store. Nếu MoMo prod trả qrCodeUrl
+                // dạng HTTPS image thì branch <Image> ở trên đã catch trước.
+                // payUrl chỉ dùng làm last fallback.
+                <div className="bg-white border border-gray-200 rounded-xl p-3">
+                  <QRCode
+                    value={(momoPayment.qrCodeUrl ?? momoPayment.deeplink ?? momoPayment.payUrl) as string}
+                    size={240}
+                    level="M"
+                  />
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 italic py-10">Không nhận được QR từ MoMo.</div>
+              )}
+            </div>
+
+            {momoStatusMsg && (
+              <p className="text-xs text-center text-gray-500 mt-3">{momoStatusMsg}</p>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {momoPayment.payUrl && (
-                <a
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-pink-600 text-white font-semibold shadow-sm hover:bg-pink-700 transition"
-                  href={momoPayment.payUrl}
-                  target="_blank"
-                  rel="noreferrer"
+            {/* DEV trigger — minimal text link để không phá thiết kế chính. Chỉ hiện
+                khi NEXT_PUBLIC_MOMO_DEV_SIMULATOR=true; BE còn enforce thật bằng env. */}
+            {process.env.NEXT_PUBLIC_MOMO_DEV_SIMULATOR === 'true' && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={handleSimulateMomoSuccess}
+                  disabled={momoSimBusy}
+                  className="text-xs text-amber-700 hover:text-amber-900 underline underline-offset-2 disabled:opacity-50"
                 >
-                  Mở MoMo (web)
-                </a>
-              )}
-              {momoPayment.deeplink && (
-                <a
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-pink-600 text-pink-600 font-semibold hover:bg-pink-50 transition"
-                  href={momoPayment.deeplink}
-                >
-                  Mở MoMo (app)
-                </a>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
-              <span>Đã thanh toán xong?</span>
-              <button
-                className="text-green-600 font-semibold hover:text-green-700"
-                onClick={() => {
-                  setMomoPayment(null);
-                  router.push('/profile?tab=orders');
-                }}
-              >
-                Xem đơn hàng
-              </button>
-            </div>
+                  {momoSimBusy ? 'Đang giả lập...' : '🧪 DEV: giả lập thanh toán thành công'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

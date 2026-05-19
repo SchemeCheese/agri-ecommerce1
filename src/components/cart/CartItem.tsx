@@ -2,6 +2,7 @@
 'use client';
 import React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Plus, Minus, X } from 'lucide-react';
 
 interface CartItemProps {
@@ -19,16 +20,30 @@ export const CartItem = ({ item }: CartItemProps) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
-  
+
+  // ProductCard uses product.id as the slug param for /products/[slug], matching here.
+  const productHref = `/products/${item.id}`;
+
   return (
     <div className="flex items-center bg-white p-4 border rounded-lg shadow-sm">
-      <div className="relative w-20 h-20 rounded-md overflow-hidden">
-        <Image src={item.imageUrl} alt={item.title} layout="fill" objectFit="cover" />
-      </div>
-      
+      <Link href={productHref} className="relative w-20 h-20 rounded-md overflow-hidden block group">
+        <Image
+          src={item.imageUrl}
+          alt={item.title}
+          fill
+          sizes="80px"
+          className="object-cover transition-transform group-hover:scale-105"
+        />
+      </Link>
+
       <div className="flex-1 ml-4">
-        <h3 className="font-semibold text-gray-800">{item.title}</h3>
-        <p className="text-sm text-gray-500">{formatCurrency(item.price)} / {item.unit}</p>
+        <Link
+          href={productHref}
+          className="font-semibold text-gray-800 hover:text-green-700 transition-colors line-clamp-2"
+        >
+          {item.title}
+        </Link>
+        <p className="text-sm text-gray-500 mt-0.5">{formatCurrency(item.price)} / {item.unit}</p>
       </div>
       
       <div className="flex items-center border border-gray-200 rounded-full mx-4">
