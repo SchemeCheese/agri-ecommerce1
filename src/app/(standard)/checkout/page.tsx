@@ -44,44 +44,42 @@ function CheckoutPageInner() {
     deeplink?: string;
     qrCodeUrl?: string;
   } | null>(null);
+  // pendingOrderId là single source of truth cho polling: set khi /payments/momo/create
+  // trả về thành công, clear khi BE báo PAID/FAILED hoặc buyer đóng popup. Tách khỏi
+  // momoPayment để effect polling không phụ thuộc vào các field UI (amount, qrCodeUrl).
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [momoSimBusy, setMomoSimBusy] = useState(false);
   const [momoStatusMsg, setMomoStatusMsg] = useState<string>('');
 
-  // Auto-poll trạng thái thanh toán MoMo sau khi popup mở.
-  // Khi BE thấy Payment.status = PAID (do IPN thật hoặc simulator), đóng popup
-  // và redirect sang trang đơn hàng — buyer không phải tự bấm "Xem đơn hàng".
+  // Poll trạng thái thanh toán MoMo mỗi 3s. Khi BE flip Payment.status (do IPN
+  // thật hoặc DEV simulator), clear interval + redirect sang /payment/success
+  // hoặc /payment/failed.
   useEffect(() => {
-    if (!momoPayment?.orderId) return;
-    let cancelled = false;
+    if (!pendingOrderId) return;
     setMomoStatusMsg('');
-    const tick = async () => {
+    const intervalId = setInterval(async () => {
       try {
-        const res = await api.get(`/payments/momo/status/${momoPayment.orderId}`);
-        if (cancelled) return;
-        if (res.data?.paymentStatus === 'PAID') {
-          // Match the real-MoMo flow: real flow's /payments/momo/return redirects
-          // browser to /payment/success; simulator path mimics that so UX is identical.
-          // router.replace so back-button doesn't return user to /checkout.
-          const orderId = momoPayment.orderId;
-          const amount = momoPayment.amount;
+        const res = await api.get('/payments/momo/status', { params: { orderId: pendingOrderId } });
+        const status = res.data?.paymentStatus;
+        if (status === 'PAID') {
+          clearInterval(intervalId);
+          const orderId = pendingOrderId;
+          setPendingOrderId(null);
           setMomoPayment(null);
-          router.replace(`/payment/success?orderId=${orderId}&amount=${amount}`);
-          return; // stop polling
-        }
-        if (res.data?.paymentStatus === 'FAILED') {
-          const orderId = momoPayment.orderId;
+          router.push(`/payment/success?orderId=${orderId}`);
+        } else if (status === 'FAILED') {
+          clearInterval(intervalId);
+          const orderId = pendingOrderId;
+          setPendingOrderId(null);
           setMomoPayment(null);
-          router.replace(`/payment/failed?orderId=${orderId}&reason=payment_failed`);
-          return;
+          router.push(`/payment/failed?orderId=${orderId}`);
         }
       } catch {
-        // network blip — keep polling
+        // network blip — giữ interval, lần tick sau retry
       }
-      if (!cancelled) setTimeout(tick, 2500);
-    };
-    tick();
-    return () => { cancelled = true; };
-  }, [momoPayment?.orderId, momoPayment?.amount, router]);
+    }, 3000);
+    return () => clearInterval(intervalId);
+  }, [pendingOrderId, router]);
 
   const handleSimulateMomoSuccess = async () => {
     if (!momoPayment) return;
@@ -258,6 +256,7 @@ function CheckoutPageInner() {
           deeplink: payRes.data?.deeplink,
           qrCodeUrl: payRes.data?.qrCodeUrl,
         });
+        setPendingOrderId(orderId);
       } else {
         router.push('/order-confirmation');
       }
@@ -287,7 +286,7 @@ function CheckoutPageInner() {
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl p-6 relative">
             <button
               className="absolute right-3 top-3 text-gray-300 hover:text-gray-500"
-              onClick={() => setMomoPayment(null)}
+              onClick={() => { setMomoPayment(null); setPendingOrderId(null); }}
               aria-label="Đóng"
             >
               <X size={18} />

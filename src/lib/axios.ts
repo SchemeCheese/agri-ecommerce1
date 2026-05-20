@@ -24,10 +24,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
-      // No response means the request never reached the server
       console.error(
-        `[API] Network error — could not reach ${API_BASE_URL}. ` +
-        'Is the backend running? Check: cd BE/agri-connect-be && npm run start:dev',
+        `[API] Network error — could not reach ${API_BASE_URL}.`,
         error.message,
       );
     } else {
