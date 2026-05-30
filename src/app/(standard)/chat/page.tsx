@@ -75,7 +75,13 @@ function ChatPageInner() {
   const [searchQuery,    setSearchQuery]    = useState('');
   const [mobileView,     setMobileView]     = useState<'list' | 'chat'>('list');
   const [negotiationCancelledFor, setNegotiationCancelledFor] = useState<Set<string>>(new Set());
+  const [socketConnected, setSocketConnected] = useState(false);
   const negotiationStartedRef = useRef(false);
+  // Intent đàm phán đang chờ socket connect để emit (xem emitStartNegotiation).
+  const pendingNegotiationRef = useRef<string | null>(null);
+  // Ref tới bản emitStartNegotiation mới nhất — để handler 'connect' gọi mà không
+  // cần đưa callback vào dependency của socket effect (tránh tạo lại socket).
+  const emitStartNegotiationRef = useRef<((conversationId: string) => void) | null>(null);
 
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -145,6 +151,7 @@ function ChatPageInner() {
 
   // ── Select conversation ──────────────────────────────────────────────────
   const selectConversation = useCallback(async (conv: Conversation) => {
+    console.debug('[Chat] conversation selected', { conversationId: conv.id, partnerId: conv.partner?.id ?? null });
     setActiveConv(conv);
     setMobileView('chat');
     activeConvIdRef.current = conv.id;
@@ -152,20 +159,67 @@ function ChatPageInner() {
     await loadMessages(conv.id);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [loadMessages]);
-  // ── Emit startNegotiation (only once per mount) ─────────────────────
+  // ── Emit startNegotiation (only once, only on a CONNECTED socket) ─────────
   const emitStartNegotiation = useCallback((conversationId: string) => {
     if (negotiationStartedRef.current) return;
     if (!productIdParam || !qtyParam)  return;
-    negotiationStartedRef.current = true;
+
+    const sock = socketRef.current;
+    // Chỉ emit khi socket đã connected. Emit trên socket CHƯA connect sẽ bị buffer
+    // và MẤT nếu socket đó bị disconnect — đúng kịch bản React StrictMode (dev mount
+    // 2 lần: socket #1 bị cleanup huỷ trước khi flush). Nếu chưa connect: lưu intent
+    // và flush trong handler 'connect' của socket đang sống.
+    if (!sock || !sock.connected) {
+      console.debug('[Chat] negotiation waiting for socket connection', {
+        conversationId,
+        productId: productIdParam,
+        quantity: qtyParam,
+        proposedPrice: proposedPriceParam,
+      });
+      pendingNegotiationRef.current = conversationId;
+      return;
+    }
+
     // Gateway tự derive conversation từ findOrCreateConversation — KHÔNG gửi conversationId.
-    // wsValidationPipe dùng forbidNonWhitelisted:true nên field thừa sẽ làm validate fail
-    // → handler không chạy → không có SYSTEM message → card đàm phán không hiện.
-    socketRef.current?.emit('startNegotiation', {
+    // wsValidationPipe dùng forbidNonWhitelisted:true nên field thừa sẽ làm validate fail.
+    const payload = {
       productId:     productIdParam,
       quantity:      qtyParam,
       proposedPrice: proposedPriceParam || undefined,
+    };
+    console.debug('[Chat] before emitting startNegotiation', {
+      conversationId,
+      socketConnected: sock.connected,
+      payload,
     });
+    sock.emit('startNegotiation', payload);
+    negotiationStartedRef.current = true;   // chỉ set guard sau khi emit đã được gọi thành công
+    pendingNegotiationRef.current = null;
   }, [productIdParam, qtyParam, proposedPriceParam]);
+
+  // Giữ ref trỏ tới bản emitStartNegotiation mới nhất cho handler 'connect'.
+  useEffect(() => {
+    emitStartNegotiationRef.current = emitStartNegotiation;
+  }, [emitStartNegotiation]);
+
+  useEffect(() => {
+    if (!isNegotiate) return;
+    console.debug('[Chat] negotiate query params detected', {
+      sellerId: sellerIdParam,
+      productId: productIdParam,
+      qty: qtyParam,
+      proposedPrice: proposedPriceParam,
+      conversationId: convIdParam,
+      socketConnected,
+      activeConversationId: activeConv?.id ?? null,
+    });
+  }, [isNegotiate, sellerIdParam, productIdParam, qtyParam, proposedPriceParam, convIdParam, socketConnected, activeConv?.id]);
+
+  useEffect(() => {
+    if (!isNegotiate || negotiationStartedRef.current) return;
+    if (!socketConnected || !activeConv?.id) return;
+    emitStartNegotiation(activeConv.id);
+  }, [isNegotiate, socketConnected, activeConv?.id, emitStartNegotiation]);
 
   // ── Cancel negotiation ──────────────────────────────────────
   const handleCancelNegotiation = () => {
@@ -193,13 +247,38 @@ function ChatPageInner() {
     });
 
     socket.on('connect', () => {
-      console.log('[Chat] Socket connected');
+      setSocketConnected(true);
+      console.debug('[Chat] Socket connected');
       // Re-join room on reconnect if there's an active conversation
       if (activeConvIdRef.current) {
+        console.debug('[Chat] re-joining room after connect', { conversationId: activeConvIdRef.current });
         socket.emit('joinRoom', { conversationId: activeConvIdRef.current });
       }
+      // Flush intent đàm phán đang chờ: emitStartNegotiation lần trước hoãn lại vì
+      // socket chưa connect (hoặc socket cũ đã bị StrictMode huỷ). Giờ socket sống → emit.
+      if (pendingNegotiationRef.current) {
+        console.debug('[Chat] flushing pending negotiation intent', { conversationId: pendingNegotiationRef.current });
+        emitStartNegotiationRef.current?.(pendingNegotiationRef.current);
+      }
     });
-    socket.on('disconnect', () => console.log('[Chat] Socket disconnected'));
+    socket.on('disconnect', (reason) => {
+      setSocketConnected(false);
+      console.log('[Chat] Socket disconnected', { reason });
+    });
+    socket.on('connect_error', (err) => {
+      console.warn('[Chat] Socket connect_error', err);
+    });
+    socket.on('error', (err) => {
+      console.warn('[Chat] Socket error event', err);
+    });
+    socket.on('exception', (err) => {
+      const message = (err as any)?.message;
+      if (message) {
+        console.warn('[Chat] Socket exception event', message, err);
+        return;
+      }
+      console.debug('[Chat] Socket exception event', err);
+    });
 
     socket.on('newMessage', (msg: Message & { conversationId?: string }) => {
       // Normalize: some older emits may use `content` instead of `message_content`
@@ -261,6 +340,7 @@ function ChatPageInner() {
         const conv = convs.find(c => c.id === conversationId);
         if (conv) {
           selectConversation(conv).then(() => {
+            console.debug('[Chat] conversationReady received', { conversationId, negotiate: isNegotiate });
             if (isNegotiate) emitStartNegotiation(conversationId);
           });
         }
@@ -283,6 +363,7 @@ function ChatPageInner() {
         const existing = convs.find(c => c.partner?.id === sellerIdParam);
         const openConv = (conv: Conversation) => {
           selectConversation(conv).then(() => {
+            console.debug('[Chat] conversation selected/created for route', { conversationId: conv.id, negotiate: isNegotiate });
             if (isNegotiate) emitStartNegotiation(conv.id);
           });
         };
@@ -290,6 +371,7 @@ function ChatPageInner() {
         api
           .post('/chat/initiate', { partnerId: sellerIdParam })
           .then(res => {
+            console.debug('[Chat] conversation created via HTTP initiate', { conversationId: res.data.conversationId, sellerId: sellerIdParam });
             socketRef.current?.emit('joinRoom', { conversationId: res.data.conversationId });
             return loadConversations().then(fresh => {
               const c = fresh.find(f => f.id === res.data.conversationId)

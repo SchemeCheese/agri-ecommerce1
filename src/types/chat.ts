@@ -82,6 +82,22 @@ export interface ConversationPartner {
   profile?: { store_name?: string };
 }
 
+export function isNegotiationRequestMessage(msg: Message): boolean {
+  return msg.message_type === 'SYSTEM'
+    && msg.context_product != null
+    && msg.proposed_quantity != null
+    && msg.proposed_price != null;
+}
+
+export function isNegotiationCancelledMessage(msg: Message): boolean {
+  return msg.message_type === 'SYSTEM'
+    && /đã hủy cuộc đàm phán/i.test(msg.message_content);
+}
+
+export function isNegotiationQuoteMessage(msg: Message): boolean {
+  return msg.message_type === 'NEGOTIATION_QUOTE';
+}
+
 /**
  * Conversation: 1 cặp buyer-seller = 1 conversation duy nhất.
  * conversation_type / product / proposedQuantity đã bị XÓA khỏi schema —
@@ -101,10 +117,20 @@ export interface Conversation {
   created_at: string;
 }
 
-/** Tìm SYSTEM message đàm phán đầu tiên (có context_product + proposed_quantity). */
+/** Tìm SYSTEM message đàm phán gần nhất (có context_product + proposed_quantity). */
 export function extractNegotiationMsg(messages: Message[]): Message | null {
-  return messages.find(
-    m => m.message_type === 'SYSTEM' && m.context_product && m.proposed_quantity != null
+  return [...messages].reverse().find(isNegotiationRequestMessage) ?? null;
+}
+
+/**
+ * Trạng thái negotiation hiện tại của conversation:
+ * - REQUEST: seller còn có thể gửi báo giá / hủy
+ * - QUOTE: đã có báo giá, khóa hành động seller
+ * - CANCELLED: đã hủy, khóa hành động seller
+ */
+export function extractLatestNegotiationEvent(messages: Message[]): Message | null {
+  return [...messages].reverse().find(
+    (msg) => isNegotiationRequestMessage(msg) || isNegotiationCancelledMessage(msg) || isNegotiationQuoteMessage(msg),
   ) ?? null;
 }
 

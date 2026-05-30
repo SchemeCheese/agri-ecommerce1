@@ -12,7 +12,16 @@ import {
 } from 'lucide-react';
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
 import { SellerQuoteForm, SellerProductOption } from '@/components/chat/SellerQuoteForm';
-import { Message, Conversation, QuoteData, SendQuotePayload, extractQuote, extractNegotiationMsg } from '@/types/chat';
+import {
+  Message,
+  Conversation,
+  QuoteData,
+  SendQuotePayload,
+  extractQuote,
+  extractNegotiationMsg,
+  extractLatestNegotiationEvent,
+  isNegotiationRequestMessage,
+} from '@/types/chat';
 import { formatCurrency } from '@/utils/vi';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -232,7 +241,9 @@ export default function SellerChatPage() {
   );
 
   const negotiationMsg    = extractNegotiationMsg(messages);
-  const isNegotiationConv = !!negotiationMsg;
+  const negotiationEvent   = extractLatestNegotiationEvent(messages);
+  const isNegotiationConv  = !!negotiationMsg;
+  const isNegotiationOpen  = !!negotiationEvent && isNegotiationRequestMessage(negotiationEvent);
   const isCancelled       = activeConv ? negotiationCancelledFor.has(activeConv.id) : false;
 
   // ════════════════════════════════════════════════════════════════════════
@@ -378,7 +389,7 @@ export default function SellerChatPage() {
               </div>
               {/* Seller actions */}
               <div className="flex items-center gap-2">
-                {isNegotiationConv && !isCancelled && (
+                  {isNegotiationConv && !isCancelled && isNegotiationOpen && (
                   <>
                     <button
                       onClick={() => setShowQuoteForm(true)}
@@ -394,6 +405,11 @@ export default function SellerChatPage() {
                     </button>
                   </>
                 )}
+                  {isNegotiationConv && !isCancelled && !isNegotiationOpen && (
+                    <div className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg">
+                      Đã xử lý báo giá
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -652,7 +668,7 @@ export default function SellerChatPage() {
               </div>
             )}
             <div className="p-4 border-t border-gray-200 bg-white flex items-center gap-2 flex-shrink-0">
-              {isNegotiationConv && !isCancelled && (
+              {isNegotiationConv && !isCancelled && isNegotiationOpen && (
                 <button
                   onClick={() => setShowQuoteForm(true)}
                   className="p-2.5 text-green-600 hover:bg-green-50 border border-green-200 rounded-xl transition flex-shrink-0"
@@ -660,6 +676,11 @@ export default function SellerChatPage() {
                 >
                   <ClipboardList size={18} />
                 </button>
+              )}
+              {isNegotiationConv && !isCancelled && !isNegotiationOpen && (
+                <div className="px-3 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 rounded-xl">
+                  Đã khóa báo giá
+                </div>
               )}
               <input
                 ref={fileInputRef}
