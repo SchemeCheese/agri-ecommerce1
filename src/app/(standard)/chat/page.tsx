@@ -23,7 +23,24 @@ const fixImg = (url: string) => {
   return `${BACKEND_URL}${url}`;
 };
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
+import { PaymentResultModal } from '@/components/chat/PaymentResultModal';
 import { Message, Conversation, QuoteData, extractQuote, extractNegotiationMsg } from '@/types/chat';
+
+interface QuoteAcceptedPayload {
+  messageId: string;
+  orderId: string;
+  checkoutSessionId: string;
+  totalAmount: number;
+  paymentMethod: 'COD' | 'MOMO';
+  awaitsPaymentSelection: boolean;
+}
+
+interface OrderStatusUpdatedPayload {
+  orderId: string;
+  checkoutSessionId?: string | null;
+  paymentStatus?: 'UNPAID' | 'PAID' | 'FAILED';
+  orderStatus?: 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | string;
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const getPartnerName = (conv: Conversation) =>
@@ -76,6 +93,14 @@ function ChatPageInner() {
   const [mobileView,     setMobileView]     = useState<'list' | 'chat'>('list');
   const [negotiationCancelledFor, setNegotiationCancelledFor] = useState<Set<string>>(new Set());
   const [socketConnected, setSocketConnected] = useState(false);
+  const [orderInfoByQuote, setOrderInfoByQuote] = useState<Record<string, QuoteAcceptedPayload & { selectedMethod?: 'COD' | 'MOMO' | null; paymentStatus?: 'UNPAID' | 'PAID' | 'FAILED' | null; orderStatus?: string | null }>>({});
+  const [payingQuoteId, setPayingQuoteId] = useState<string | null>(null);
+  const [momoPaymentData, setMomoPaymentData] = useState<{
+    amount?: number;
+    payUrl?: string;
+    deeplink?: string;
+    qrCodeUrl?: string;
+  } | null>(null);
   const negotiationStartedRef = useRef(false);
   // Intent đàm phán đang chờ socket connect để emit (xem emitStartNegotiation).
   const pendingNegotiationRef = useRef<string | null>(null);
@@ -236,6 +261,51 @@ function ChatPageInner() {
       conversationId: activeConv.id,
     });
   };
+
+  const handleSelectPayment = useCallback(async (messageId: string, method: 'COD' | 'MOMO') => {
+    const info = orderInfoByQuote[messageId];
+    if (!info) return;
+    setPayingQuoteId(messageId);
+    try {
+      if (method === 'COD') {
+        setOrderInfoByQuote((prev) => ({
+          ...prev,
+          [messageId]: { ...prev[messageId], selectedMethod: 'COD' },
+        }));
+        const shortId = info.orderId.slice(-6).toUpperCase();
+        const syntheticMsg: Message = {
+          id: `local-cod-${info.orderId}`,
+          message_content: `✅ Đơn #${shortId} đã được đặt thành công (COD). Seller đang chờ xác nhận.`,
+          message_type: 'SYSTEM',
+          created_at: new Date().toISOString(),
+          sender: { id: user?.id ?? '', full_name: user?.full_name ?? '' },
+        };
+        setMessages((prev) => [...prev, syntheticMsg]);
+        return;
+      }
+
+      const { data } = await api.post('/payments/momo/create', {
+        checkout_session_id: info.checkoutSessionId,
+      });
+
+      setOrderInfoByQuote((prev) => ({
+        ...prev,
+        [messageId]: { ...prev[messageId], selectedMethod: 'MOMO' },
+      }));
+
+      setMomoPaymentData({
+        amount: Number(info.totalAmount ?? 0),
+        payUrl: data?.payUrl,
+        deeplink: data?.deeplink,
+        qrCodeUrl: data?.qrCodeUrl,
+      });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Không cập nhật được phương thức thanh toán.';
+      alert(typeof msg === 'string' ? msg : 'Lỗi cập nhật phương thức thanh toán.');
+    } finally {
+      setPayingQuoteId(null);
+    }
+  }, [orderInfoByQuote, user]);
   // ── Socket setup ─────────────────────────────────────────────────────────
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -321,12 +391,38 @@ function ChatPageInner() {
     });
 
     // Buyer accepted — BE đã tạo Order tự động (checkout-in-chat flow).
-    // Full-page chat tạm redirect sang trang chi tiết đơn để buyer chọn payment;
-    // widget panel có Pay Now selector inline (xem BuyerChatWidgetPanel).
-    socket.on('quoteAccepted', (payload: { orderId?: string; checkoutSessionId?: string }) => {
-      if (payload?.orderId) {
-        router.push(`/profile/orders/${payload.orderId}`);
-      }
+    // Giữ buyer ở lại chat để chọn payment và xem QR giống widget panel.
+    socket.on('quoteAccepted', (payload: QuoteAcceptedPayload) => {
+      if (!payload?.messageId) return;
+      setOrderInfoByQuote((prev) => ({
+        ...prev,
+        [payload.messageId]: {
+          ...payload,
+          selectedMethod: null,
+          paymentStatus: null,
+          orderStatus: 'PENDING',
+        },
+      }));
+    });
+
+    socket.on('orderStatusUpdated', (payload: OrderStatusUpdatedPayload) => {
+      setOrderInfoByQuote((prev) => {
+        const next = { ...prev };
+        for (const [messageId, info] of Object.entries(prev)) {
+          if (info.orderId === payload.orderId) {
+            next[messageId] = {
+              ...info,
+              paymentStatus: payload.paymentStatus ?? info.paymentStatus,
+              orderStatus: payload.orderStatus ?? info.orderStatus,
+            };
+            break;
+          }
+        }
+        if (payload.paymentStatus === 'PAID') {
+          setMomoPaymentData(null);
+        }
+        return next;
+      });
     });
 
     // Negotiation cancelled
@@ -476,7 +572,18 @@ function ChatPageInner() {
 
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <div className="bg-gray-50 min-h-screen pt-4 pb-10">
+    <>
+      <PaymentResultModal
+        open={!!momoPaymentData}
+        message="Thanh toán MoMo"
+        subMessage="Quét mã QR để thanh toán hoặc mở MoMo nếu bạn muốn dùng ứng dụng."
+        payment={momoPaymentData}
+        onOpenPayment={() => {
+          const url = momoPaymentData?.payUrl || momoPaymentData?.deeplink;
+          if (url) window.location.href = url;
+        }}
+      />
+      <div className="bg-gray-50 min-h-screen pt-4 pb-10">
       <Container>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
@@ -863,6 +970,9 @@ function ChatPageInner() {
                                 isBuyer={!isMe}
                                 onAccept={() => respondToQuote(quote.messageId, 'ACCEPTED')}
                                 onReject={() => respondToQuote(quote.messageId, 'REJECTED')}
+                                orderInfo={orderInfoByQuote[quote.messageId]}
+                                onSelectPayment={(method) => handleSelectPayment(quote.messageId, method)}
+                                paymentLoading={payingQuoteId === quote.messageId}
                               />
                             </div>
                           </div>
@@ -974,6 +1084,7 @@ function ChatPageInner() {
           </div>
         </div>
       </Container>
-    </div>
+      </div>
+    </>
   );
 }

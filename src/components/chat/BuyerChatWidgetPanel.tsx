@@ -111,11 +111,16 @@ export default function BuyerChatWidgetPanel({
   const [orderInfoByQuote, setOrderInfoByQuote] = useState<Record<string, QuoteOrderInfo>>({});
   // Modal "Vui lòng cập nhật địa chỉ" khi BE từ chối ACCEPT vì address rỗng.
   const [missingAddrModal, setMissingAddrModal] = useState<{ messageId: string; message: string } | null>(null);
-  // Spinner cho 1 quote đang gọi /orders/:id/select-payment.
+  // Spinner cho 1 quote đang gọi /payments/momo/create.
   const [payingQuoteId, setPayingQuoteId] = useState<string | null>(null);
-  // Overlay "Đang chuyển hướng sang MoMo..." — hiển thị giữa lúc API select-payment
-  // trả payUrl xong tới khi browser thực sự redirect (vài trăm ms).
+  // Overlay MoMo QR — hiển thị khi BE trả payUrl/deeplink/qrCodeUrl.
   const [momoRedirecting, setMomoRedirecting] = useState(false);
+  const [momoPaymentData, setMomoPaymentData] = useState<{
+    amount?: number;
+    payUrl?: string;
+    deeplink?: string;
+    qrCodeUrl?: string;
+  } | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -359,14 +364,37 @@ export default function BuyerChatWidgetPanel({
 
   // Buyer click MoMo/COD trong card sau khi ACCEPT báo giá. KHÔNG navigate
   // sang /checkout — chat ở yên trong widget. COD: inject SYSTEM message
-  // confirm vào chat history. MoMo: bật overlay + redirect tới MoMo gateway.
+  // confirm vào chat history. MoMo: mở modal QR trong chat, kèm link dự phòng.
   const handleSelectPayment = useCallback(
     async (messageId: string, method: 'COD' | 'MOMO') => {
       const info = orderInfoByQuote[messageId];
       if (!info) return;
       setPayingQuoteId(messageId);
       try {
-        const { data } = await api.post(`/orders/${info.orderId}/select-payment`, {
+        if (method === 'MOMO') {
+          const { data } = await api.post('/payments/momo/create', {
+            checkout_session_id: info.checkoutSessionId,
+          });
+
+          setMomoPaymentData({
+            amount: Number(info.totalAmount ?? 0),
+            payUrl: data?.payUrl,
+            deeplink: data?.deeplink,
+            qrCodeUrl: data?.qrCodeUrl,
+          });
+
+          if (data?.payUrl || data?.deeplink || data?.qrCodeUrl) {
+            setMomoRedirecting(true);
+          }
+
+          setOrderInfoByQuote((prev) => ({
+            ...prev,
+            [messageId]: { ...prev[messageId], selectedMethod: 'MOMO' },
+          }));
+          return;
+        }
+
+        const { data } = await api.post(`/orders/${info.orderId}/change-payment-method`, {
           payment_method: method,
         });
         // Mark selectedMethod để card show kết quả
@@ -390,18 +418,6 @@ export default function BuyerChatWidgetPanel({
           setMessages((prev) => [...prev, syntheticMsg]);
         }
 
-        if (method === 'MOMO') {
-          const url: string | undefined = data?.payUrl || data?.deeplink;
-          if (url) {
-            // Overlay "Đang chuyển hướng..." — giữ buyer ở chat tới khi browser
-            // bắt đầu navigate (location.href thay đổi sync, vài ms sau là rời).
-            setMomoRedirecting(true);
-            // setTimeout 0 để paint overlay frame trước khi redirect rời tab.
-            setTimeout(() => {
-              window.location.href = url;
-            }, 0);
-          }
-        }
       } catch (err: any) {
         const msg = err?.response?.data?.message || err?.message || 'Không cập nhật được phương thức thanh toán.';
         alert(typeof msg === 'string' ? msg : 'Lỗi cập nhật phương thức thanh toán.');
@@ -549,13 +565,16 @@ export default function BuyerChatWidgetPanel({
 
   const ChatPane = (
     <div className="flex h-full flex-col relative">
-      {/* MoMo redirecting overlay — phủ ChatPane khi click "Trả qua MoMo" tới khi
-          browser thực sự navigate. Spec: "No browser navigation to /checkout
-          page. Everything happens in the ChatPopoverWindow." */}
+      {/* MoMo QR overlay — phủ ChatPane khi click "Trả qua MoMo". */}
       <PaymentResultModal
         open={momoRedirecting}
-        message="Đang chuyển hướng sang MoMo..."
-        subMessage="Vui lòng chờ trong giây lát. Bạn sẽ được đưa tới trang thanh toán MoMo."
+        message="Thanh toán MoMo"
+        subMessage="Quét mã QR để thanh toán hoặc mở MoMo nếu bạn muốn dùng ứng dụng."
+        payment={momoPaymentData}
+        onOpenPayment={() => {
+          const url = momoPaymentData?.payUrl || momoPaymentData?.deeplink;
+          if (url) window.location.href = url;
+        }}
       />
       {!activeConv ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-white">
