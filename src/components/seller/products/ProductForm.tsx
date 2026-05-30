@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Upload, X, Save, Loader2, ChevronRight, Handshake } from 'lucide-react';
+import api from '@/lib/axios';
 import { SellerProduct, ProductFormData } from '@/hooks/useSellerProducts';
 
 interface ProductFormProps {
@@ -10,26 +11,42 @@ interface ProductFormProps {
   onSubmit: (data: ProductFormData, imageFiles: File[]) => Promise<void>;
 }
 
-const CATEGORIES = [
-  { value: 'trai-cay',   label: 'Trái cây'   },
-  { value: 'rau-cu',     label: 'Rau củ'     },
-  { value: 'hat-ngu-coc', label: 'Hạt ngũ cốc' },
-  { value: 'do-kho',     label: 'Đồ khô'     },
-  { value: 'nuoc-ep',    label: 'Nước ép'    },
-  { value: 'khac',       label: 'Khác'       },
-];
+interface CategoryOption {
+  id: number;
+  name: string;
+}
 
 export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormData>({
     name:                initialData?.name                ?? '',
-    price:               initialData?.price               ?? 0,
-    stock:               initialData?.stock               ?? 100,
+    reference_price:     initialData?.price               ?? 0,
+    stock_quantity:      initialData?.stock               ?? 100,
     description:         initialData?.description         ?? '',
     unit:                initialData?.unit                ?? 'kg',
-    category:            initialData?.category            ?? 'trai-cay',
-    origin:              initialData?.origin              ?? '',
+    category_id:         initialData?.category_id,
+    location:            initialData?.origin              ?? '',
     min_negotiation_qty: initialData?.min_negotiation_qty ?? null,
   });
+
+  // Categories fetched from BE — single source of truth for the dropdown.
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<CategoryOption[]>('/products/categories')
+      .then((res) => {
+        if (cancelled) return;
+        setCategories(res.data);
+        // If form has no category selected yet (create flow), default to the first option.
+        setFormData((prev) =>
+          prev.category_id == null && res.data.length > 0
+            ? { ...prev, category_id: res.data[0].id }
+            : prev,
+        );
+      })
+      .catch(() => { /* dropdown stays empty; submit-time guard catches it */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Negotiation toggle
   const [allowNegotiation, setAllowNegotiation] = useState(
@@ -47,7 +64,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleChange = (field: keyof ProductFormData, value: any) => {
+  const handleChange = <K extends keyof ProductFormData>(field: K, value: ProductFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -75,8 +92,9 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name.trim()) { setSaveError('Vui lòng nhập tên sản phẩm'); return; }
-    if (formData.price <= 0)   { setSaveError('Giá bán phải lớn hơn 0');     return; }
+    if (!formData.name.trim())          { setSaveError('Vui lòng nhập tên sản phẩm'); return; }
+    if (formData.reference_price <= 0)  { setSaveError('Giá bán phải lớn hơn 0');     return; }
+    if (formData.category_id == null)   { setSaveError('Vui lòng chọn danh mục');     return; }
     if (allowNegotiation && (!formData.min_negotiation_qty || formData.min_negotiation_qty <= 0)) {
       setSaveError('Vui lòng nhập ngưỡng số lượng tối thiểu cho thương lượng');
       return;
@@ -136,8 +154,8 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <label className="block text-sm font-bold text-gray-700 mb-2">Xuất xứ</label>
               <input
                 type="text"
-                value={formData.origin}
-                onChange={e => handleChange('origin', e.target.value)}
+                value={formData.location}
+                onChange={e => handleChange('location', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                 placeholder="VD: Đà Lạt"
               />
@@ -170,8 +188,8 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <input
                 type="number"
                 min={0}
-                value={formData.price}
-                onChange={e => handleChange('price', Number(e.target.value))}
+                value={formData.reference_price}
+                onChange={e => handleChange('reference_price', Number(e.target.value))}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none text-xl font-bold text-green-600"
               />
             </div>
@@ -182,8 +200,8 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <input
                 type="number"
                 min={0}
-                value={formData.stock}
-                onChange={e => handleChange('stock', Number(e.target.value))}
+                value={formData.stock_quantity}
+                onChange={e => handleChange('stock_quantity', Number(e.target.value))}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none font-bold"
               />
             </div>
@@ -274,12 +292,16 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
             <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
             <div className="relative">
               <select
-                value={formData.category}
-                onChange={e => handleChange('category', e.target.value)}
-                className="w-full appearance-none px-4 py-3 rounded-xl border border-gray-200 bg-white focus:border-green-500 outline-none"
+                value={formData.category_id ?? ''}
+                onChange={e => handleChange('category_id', e.target.value === '' ? undefined : Number(e.target.value))}
+                disabled={categories.length === 0}
+                className="w-full appearance-none px-4 py-3 rounded-xl border border-gray-200 bg-white focus:border-green-500 outline-none disabled:bg-gray-50 disabled:text-gray-400"
               >
-                {CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                {categories.length === 0 && (
+                  <option value="">Đang tải danh mục...</option>
+                )}
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
               <ChevronRight className="absolute right-4 top-3.5 text-gray-400 rotate-90 pointer-events-none" size={16} />
@@ -359,4 +381,3 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
     </div>
   );
 };
-

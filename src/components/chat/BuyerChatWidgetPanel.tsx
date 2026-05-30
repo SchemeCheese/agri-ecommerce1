@@ -20,14 +20,48 @@ import {
 import api from '@/lib/axios';
 import { SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import { useAuth } from '@/context/AuthContext';
+import { formatCurrency } from '@/utils/vi';
 import {
   Conversation,
   Message,
   QuoteData,
-  CheckoutData,
   extractQuote,
 } from '@/types/chat';
-import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
+import { NegotiationQuoteCard, QuoteOrderInfo } from '@/components/chat/NegotiationQuoteCard';
+import { PaymentResultModal } from '@/components/chat/PaymentResultModal';
+
+// Payload BE emit qua WS event `orderStatusUpdated` — sau MoMo IPN hoặc các
+// trạng thái khác. messageId optional vì BE không phải lúc nào cũng biết quote
+// nào liên kết với order (FE tự map qua orderId).
+interface OrderStatusUpdatedPayload {
+  orderId:           string;
+  checkoutSessionId?: string | null;
+  paymentMethod?:    string;
+  paymentStatus?:    'UNPAID' | 'PAID' | 'FAILED';
+  orderStatus?:      'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | string;
+}
+
+// Payload BE emit qua WS event `quoteAccepted` sau khi tạo Order tự động.
+interface QuoteAcceptedPayload {
+  messageId:           string;
+  orderId:             string;
+  checkoutSessionId:   string;
+  sellerId:            string;
+  productId:           string;
+  productName:         string;
+  quantity:            number;
+  unit:                string;
+  negotiatedPrice:     number;
+  totalAmount:         number;
+  paymentMethod:       'COD' | 'MOMO' | 'QR_CODE' | 'ZALOPAY';
+  awaitsPaymentSelection: boolean;
+}
+
+interface NegotiationErrorPayload {
+  messageId: string;
+  code:      'MISSING_SHIPPING_ADDRESS' | string;
+  message:   string;
+}
 
 type Mode = 'popup' | 'fullscreen';
 
@@ -71,6 +105,17 @@ export default function BuyerChatWidgetPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [unreadConvIds, setUnreadConvIds] = useState<Set<string>>(new Set());
+
+  // Per-message order info từ quoteAccepted — key = quote messageId.
+  // Card đọc map này để render Pay Now selector inline thay vì redirect /checkout.
+  const [orderInfoByQuote, setOrderInfoByQuote] = useState<Record<string, QuoteOrderInfo>>({});
+  // Modal "Vui lòng cập nhật địa chỉ" khi BE từ chối ACCEPT vì address rỗng.
+  const [missingAddrModal, setMissingAddrModal] = useState<{ messageId: string; message: string } | null>(null);
+  // Spinner cho 1 quote đang gọi /orders/:id/select-payment.
+  const [payingQuoteId, setPayingQuoteId] = useState<string | null>(null);
+  // Overlay "Đang chuyển hướng sang MoMo..." — hiển thị giữa lúc API select-payment
+  // trả payUrl xong tới khi browser thực sự redirect (vài trăm ms).
+  const [momoRedirecting, setMomoRedirecting] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -188,17 +233,54 @@ export default function BuyerChatWidgetPanel({
       );
     });
 
-    socket.on('negotiationAccepted', ({ checkoutData }: { checkoutData: CheckoutData }) => {
-      const { productId, productName, quantity, negotiatedPrice, unit, sellerId } = checkoutData;
-      router.push(
-        `/checkout?ng=1` +
-          `&id=${encodeURIComponent(productId)}` +
-          `&name=${encodeURIComponent(productName)}` +
-          `&qty=${quantity}` +
-          `&price=${encodeURIComponent(negotiatedPrice)}` +
-          `&unit=${encodeURIComponent(unit)}` +
-          `&sellerId=${encodeURIComponent(sellerId)}`
-      );
+    // Checkout-in-chat: BE đã tạo Order khi buyer ACCEPT — không redirect sang
+    // /checkout nữa, chỉ lưu orderInfo để card render Pay Now selector inline.
+    // Event `quoteAccepted` (đổi tên từ `negotiationAccepted` cho rõ semantic).
+    socket.on('quoteAccepted', (payload: QuoteAcceptedPayload) => {
+      setOrderInfoByQuote((prev) => ({
+        ...prev,
+        [payload.messageId]: {
+          orderId:           payload.orderId,
+          checkoutSessionId: payload.checkoutSessionId,
+          totalAmount:       payload.totalAmount,
+          awaitsPaymentSelection: payload.awaitsPaymentSelection,
+          selectedMethod:    null,
+        },
+      }));
+    });
+
+    // ACCEPT bị BE chặn (vd MISSING_SHIPPING_ADDRESS) — bật modal bắt buyer cập
+    // nhật profile, quote vẫn PENDING để buyer accept lại sau khi sửa.
+    socket.on('negotiationError', (payload: NegotiationErrorPayload) => {
+      if (payload.code === 'MISSING_SHIPPING_ADDRESS') {
+        setMissingAddrModal({ messageId: payload.messageId, message: payload.message });
+      }
+    });
+
+    // Order status update từ BE — chủ yếu sau MoMo IPN flip session=PAID,
+    // Order=CONFIRMED. FE tìm quote có orderId khớp rồi update paymentStatus/
+    // orderStatus để card chuyển sang "Đã thanh toán & xác nhận" tự động.
+    socket.on('orderStatusUpdated', (payload: OrderStatusUpdatedPayload) => {
+      setOrderInfoByQuote((prev) => {
+        const next = { ...prev };
+        let matchedMessageId: string | null = null;
+        for (const [msgId, info] of Object.entries(prev)) {
+          if (info.orderId === payload.orderId) {
+            matchedMessageId = msgId;
+            next[msgId] = {
+              ...info,
+              paymentStatus: payload.paymentStatus ?? info.paymentStatus,
+              orderStatus:   payload.orderStatus   ?? info.orderStatus,
+            };
+            break;
+          }
+        }
+        // Tắt overlay MoMo nếu update này là cho order đang redirect
+        if (matchedMessageId && payload.paymentStatus === 'PAID') {
+          setMomoRedirecting(false);
+        }
+        return next;
+      });
     });
 
     socketRef.current = socket;
@@ -274,6 +356,61 @@ export default function BuyerChatWidgetPanel({
       conversationId: activeConv.id,
     });
   };
+
+  // Buyer click MoMo/COD trong card sau khi ACCEPT báo giá. KHÔNG navigate
+  // sang /checkout — chat ở yên trong widget. COD: inject SYSTEM message
+  // confirm vào chat history. MoMo: bật overlay + redirect tới MoMo gateway.
+  const handleSelectPayment = useCallback(
+    async (messageId: string, method: 'COD' | 'MOMO') => {
+      const info = orderInfoByQuote[messageId];
+      if (!info) return;
+      setPayingQuoteId(messageId);
+      try {
+        const { data } = await api.post(`/orders/${info.orderId}/select-payment`, {
+          payment_method: method,
+        });
+        // Mark selectedMethod để card show kết quả
+        setOrderInfoByQuote((prev) => ({
+          ...prev,
+          [messageId]: { ...prev[messageId], selectedMethod: method },
+        }));
+
+        if (method === 'COD') {
+          // In-chat confirmation: push 1 SYSTEM message ngay vào history hiện tại
+          // (synthetic — không persist DB, không gửi WS). Buyer thấy luồng đặt
+          // hàng hoàn tất ngay trong chat thay vì redirect ra page khác.
+          const shortId = info.orderId.slice(-6).toUpperCase();
+          const syntheticMsg: Message = {
+            id:              `local-cod-${info.orderId}`,
+            message_content: `✅ Đơn #${shortId} đã được đặt thành công (COD). Seller đang chờ xác nhận.`,
+            message_type:    'SYSTEM',
+            created_at:      new Date().toISOString(),
+            sender:          { id: user?.id ?? '', full_name: user?.full_name ?? '' },
+          };
+          setMessages((prev) => [...prev, syntheticMsg]);
+        }
+
+        if (method === 'MOMO') {
+          const url: string | undefined = data?.payUrl || data?.deeplink;
+          if (url) {
+            // Overlay "Đang chuyển hướng..." — giữ buyer ở chat tới khi browser
+            // bắt đầu navigate (location.href thay đổi sync, vài ms sau là rời).
+            setMomoRedirecting(true);
+            // setTimeout 0 để paint overlay frame trước khi redirect rời tab.
+            setTimeout(() => {
+              window.location.href = url;
+            }, 0);
+          }
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || 'Không cập nhật được phương thức thanh toán.';
+        alert(typeof msg === 'string' ? msg : 'Lỗi cập nhật phương thức thanh toán.');
+      } finally {
+        setPayingQuoteId(null);
+      }
+    },
+    [orderInfoByQuote, user]
+  );
 
   const filteredConvs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -411,7 +548,15 @@ export default function BuyerChatWidgetPanel({
   );
 
   const ChatPane = (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col relative">
+      {/* MoMo redirecting overlay — phủ ChatPane khi click "Trả qua MoMo" tới khi
+          browser thực sự navigate. Spec: "No browser navigation to /checkout
+          page. Everything happens in the ChatPopoverWindow." */}
+      <PaymentResultModal
+        open={momoRedirecting}
+        message="Đang chuyển hướng sang MoMo..."
+        subMessage="Vui lòng chờ trong giây lát. Bạn sẽ được đưa tới trang thanh toán MoMo."
+      />
       {!activeConv ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-white">
           <div className="w-16 h-16 rounded-full bg-green-50 border border-green-100 flex items-center justify-center mb-4">
@@ -498,6 +643,66 @@ export default function BuyerChatWidgetPanel({
 
               if (msg.message_type === 'SYSTEM') {
                 const cp = msg.context_product;
+
+                // SYSTEM + context_product + proposed_quantity → "Yêu cầu thương lượng"
+                // Buyer chính họ vừa khởi tạo → hiển thị card đầy đủ kg/giá/tổng để
+                // họ thấy lại đã đề xuất gì (seller side đã có UI riêng).
+                if (cp && msg.proposed_quantity != null) {
+                  const qty = Number(msg.proposed_quantity);
+                  const price = msg.proposed_price != null ? Number(msg.proposed_price) : null;
+                  const total = price != null ? qty * price : null;
+                  const unit = cp.unit || 'kg';
+
+                  return (
+                    <div key={msg.id || idx}>
+                      {timeChip}
+                      <div className="flex justify-center my-2 px-2">
+                        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 w-full max-w-[320px] shadow-sm">
+                          <div className="flex items-center gap-2 pb-2 mb-2 border-b border-orange-100">
+                            <span className="text-base">🌾</span>
+                            <span className="text-xs font-bold text-orange-800 uppercase tracking-wide">
+                              Yêu cầu thương lượng
+                            </span>
+                          </div>
+                          <Link
+                            href={`/products/${cp.id}`}
+                            className="flex items-center gap-2 mb-2 hover:opacity-80"
+                          >
+                            {cp.image && (
+                              <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 border border-orange-100">
+                                <img src={resolveImageUrl(cp.image)} alt={cp.name} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <span className="text-sm font-bold text-gray-900 truncate">{cp.name}</span>
+                          </Link>
+                          <div className="bg-white rounded-xl border border-orange-100 px-3 py-2 text-xs space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Số lượng:</span>
+                              <span className="font-bold text-gray-900">{qty} {unit}</span>
+                            </div>
+                            {price != null && (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Giá đề xuất:</span>
+                                  <span className="font-bold text-orange-600">{formatCurrency(price)}/{unit}</span>
+                                </div>
+                                <div className="flex justify-between border-t border-orange-100 pt-1">
+                                  <span className="text-gray-600 font-medium">Tổng:</span>
+                                  <span className="font-black text-orange-700">{formatCurrency(total!)}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-orange-700/80 mt-2 text-center">
+                            Đang chờ shop phản hồi báo giá...
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // SYSTEM + context_product (chỉ chip sản phẩm — câu hỏi thường về SP)
                 if (cp) {
                   return (
                     <div key={msg.id || idx}>
@@ -536,6 +741,7 @@ export default function BuyerChatWidgetPanel({
 
               const quote = extractQuote(msg);
               if (msg.message_type === 'NEGOTIATION_QUOTE' && quote) {
+                const orderInfo = orderInfoByQuote[quote.messageId];
                 return (
                   <div key={msg.id || idx}>
                     {timeChip}
@@ -550,6 +756,9 @@ export default function BuyerChatWidgetPanel({
                         isBuyer={true}
                         onAccept={() => respondToQuote(quote.messageId, 'ACCEPTED')}
                         onReject={() => respondToQuote(quote.messageId, 'REJECTED')}
+                        orderInfo={orderInfo}
+                        onSelectPayment={(method) => handleSelectPayment(quote.messageId, method)}
+                        paymentLoading={payingQuoteId === quote.messageId}
                       />
                     </div>
                   </div>
@@ -654,26 +863,72 @@ export default function BuyerChatWidgetPanel({
     </div>
   );
 
+  // Modal "Vui lòng cập nhật địa chỉ giao hàng" — bật khi BE từ chối ACCEPT báo
+  // giá vì profile.address rỗng. Buyer click "Cập nhật" → router.push(/profile)
+  // để sửa, rồi quay lại accept lại quote (vẫn PENDING).
+  const MissingAddressModal = missingAddrModal && (
+    <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+        <div className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-600 text-lg">
+              ⚠️
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-gray-900 text-sm">Cần địa chỉ giao hàng</h3>
+              <p className="text-xs text-gray-600 mt-1 leading-relaxed">{missingAddrModal.message}</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setMissingAddrModal(null)}
+            className="px-3 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition"
+          >
+            Để sau
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMissingAddrModal(null);
+              router.push('/profile?tab=info');
+            }}
+            className="px-3 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition"
+          >
+            Cập nhật ngay
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (isSplit) {
     return (
-      <div className="h-full grid grid-cols-1 md:grid-cols-[320px_1fr] bg-white">
-        <div className="border-r border-gray-100">{ListPane}</div>
-        <div>{ChatPane}</div>
-      </div>
+      <>
+        <div className="h-full grid grid-cols-1 md:grid-cols-[320px_1fr] bg-white">
+          <div className="border-r border-gray-100">{ListPane}</div>
+          <div>{ChatPane}</div>
+        </div>
+        {MissingAddressModal}
+      </>
     );
   }
 
   // Popup: slide between list/chat
   return (
-    <div className="h-full bg-white relative overflow-hidden">
-      <div
-        className={`h-full w-[200%] flex transition-transform duration-300 ${
-          mobileView === 'list' ? 'translate-x-0' : '-translate-x-1/2'
-        }`}
-      >
-        <div className="w-1/2 border-r border-gray-100">{ListPane}</div>
-        <div className="w-1/2">{ChatPane}</div>
+    <>
+      <div className="h-full bg-white relative overflow-hidden">
+        <div
+          className={`h-full w-[200%] flex transition-transform duration-300 ${
+            mobileView === 'list' ? 'translate-x-0' : '-translate-x-1/2'
+          }`}
+        >
+          <div className="w-1/2 border-r border-gray-100">{ListPane}</div>
+          <div className="w-1/2">{ChatPane}</div>
+        </div>
       </div>
-    </div>
+      {MissingAddressModal}
+    </>
   );
 }

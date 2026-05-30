@@ -23,7 +23,7 @@ const fixImg = (url: string) => {
   return `${BACKEND_URL}${url}`;
 };
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
-import { Message, Conversation, QuoteData, CheckoutData, extractQuote, extractNegotiationMsg } from '@/types/chat';
+import { Message, Conversation, QuoteData, extractQuote, extractNegotiationMsg } from '@/types/chat';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const getPartnerName = (conv: Conversation) =>
@@ -157,8 +157,10 @@ function ChatPageInner() {
     if (negotiationStartedRef.current) return;
     if (!productIdParam || !qtyParam)  return;
     negotiationStartedRef.current = true;
+    // Gateway tự derive conversation từ findOrCreateConversation — KHÔNG gửi conversationId.
+    // wsValidationPipe dùng forbidNonWhitelisted:true nên field thừa sẽ làm validate fail
+    // → handler không chạy → không có SYSTEM message → card đàm phán không hiện.
     socketRef.current?.emit('startNegotiation', {
-      conversationId,
       productId:     productIdParam,
       quantity:      qtyParam,
       proposedPrice: proposedPriceParam || undefined,
@@ -239,18 +241,13 @@ function ChatPageInner() {
       );
     });
 
-    // Buyer accepted → redirect to checkout
-    socket.on('negotiationAccepted', ({ checkoutData }: { checkoutData: CheckoutData }) => {
-      const { productId, productName, quantity, negotiatedPrice, unit, sellerId: sId } = checkoutData;
-      router.push(
-        `/checkout?ng=1` +
-        `&id=${encodeURIComponent(productId)}` +
-        `&name=${encodeURIComponent(productName)}` +
-        `&qty=${quantity}` +
-        `&price=${encodeURIComponent(negotiatedPrice)}` +
-        `&unit=${encodeURIComponent(unit)}` +
-        `&sellerId=${encodeURIComponent(sId)}`
-      );
+    // Buyer accepted — BE đã tạo Order tự động (checkout-in-chat flow).
+    // Full-page chat tạm redirect sang trang chi tiết đơn để buyer chọn payment;
+    // widget panel có Pay Now selector inline (xem BuyerChatWidgetPanel).
+    socket.on('quoteAccepted', (payload: { orderId?: string; checkoutSessionId?: string }) => {
+      if (payload?.orderId) {
+        router.push(`/profile/orders/${payload.orderId}`);
+      }
     });
 
     // Negotiation cancelled

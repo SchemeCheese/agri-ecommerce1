@@ -1,19 +1,48 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, XCircle, ClipboardList } from 'lucide-react';
+import { CheckCircle2, XCircle, ClipboardList, Wallet, Banknote, Loader2 } from 'lucide-react';
 import { QuoteData } from '@/types/chat';
 import { formatCurrency } from '@/utils/vi';
 
+// Thông tin Order do BE tạo ngay khi buyer ACCEPT báo giá (gửi qua WS event
+// `quoteAccepted`). Nếu có → card show payment selector inline thay vì
+// chỉ một badge tĩnh.
+export interface QuoteOrderInfo {
+  orderId:            string;
+  checkoutSessionId:  string;
+  totalAmount:        number;
+  awaitsPaymentSelection?: boolean;
+  /** Phương thức đã được chọn (sau khi click) — null khi chưa chọn */
+  selectedMethod?:    'COD' | 'MOMO' | null;
+  /** WS `orderStatusUpdated` cập nhật khi MoMo IPN flip session PAID. */
+  paymentStatus?:     'UNPAID' | 'PAID' | 'FAILED' | null;
+  orderStatus?:       'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | string | null;
+}
+
 interface Props {
   quote:     QuoteData;
-  /** true = người xem là buyer (có nút Accept/Reject) */
+  /** true = người xem là buyer (có nút Accept/Reject + payment selector) */
   isBuyer:   boolean;
   onAccept?: () => void;
   onReject?: () => void;
+  /** Có khi quote.status === 'ACCEPTED' và BE đã tạo Order */
+  orderInfo?: QuoteOrderInfo;
+  /** Callback khi buyer chọn payment method — parent gọi API select-payment */
+  onSelectPayment?: (method: 'COD' | 'MOMO') => void;
+  /** Đang gọi API select-payment (disable button + spinner) */
+  paymentLoading?: boolean;
 }
 
-export const NegotiationQuoteCard = ({ quote, isBuyer, onAccept, onReject }: Props) => {
+export const NegotiationQuoteCard = ({
+  quote,
+  isBuyer,
+  onAccept,
+  onReject,
+  orderInfo,
+  onSelectPayment,
+  paymentLoading,
+}: Props) => {
   const total = quote.price * quote.quantity;
 
   return (
@@ -71,8 +100,64 @@ export const NegotiationQuoteCard = ({ quote, isBuyer, onAccept, onReject }: Pro
       )}
 
       {quote.status === 'ACCEPTED' && (
-        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-xl text-sm font-bold border border-green-200">
-          <CheckCircle2 size={15} /> Đã chấp nhận
+        <div className="space-y-2.5">
+          {/* Status badge — luôn hiển thị, kể cả khi chưa có orderInfo (legacy / race) */}
+          <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-xl text-xs font-bold border border-green-200">
+            <CheckCircle2 size={15} />
+            <span>Đã chấp nhận</span>
+            {orderInfo && (
+              <span className="ml-auto text-[10px] font-semibold text-green-600/80 tracking-wide">
+                #{orderInfo.orderId.slice(-6).toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          {/* Pay Now selector — chỉ hiện cho buyer + khi BE đã tạo Order + chưa chọn method */}
+          {isBuyer && orderInfo?.awaitsPaymentSelection && !orderInfo.selectedMethod && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+              <div className="text-[11px] font-bold text-amber-800 mb-2 uppercase tracking-wide">
+                Chọn phương thức thanh toán
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onSelectPayment?.('MOMO')}
+                  disabled={paymentLoading}
+                  className="flex items-center justify-center gap-1.5 bg-pink-600 hover:bg-pink-700 disabled:opacity-60 disabled:cursor-wait text-white py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
+                >
+                  {paymentLoading ? <Loader2 size={14} className="animate-spin" /> : <Wallet size={14} />}
+                  Trả qua MoMo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectPayment?.('COD')}
+                  disabled={paymentLoading}
+                  className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-wait text-white py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
+                >
+                  {paymentLoading ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} />}
+                  COD
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Trạng thái sau khi chọn method — ưu tiên paymentStatus từ WS update
+              (MoMo IPN flip CONFIRMED) > selectedMethod local optimistic. */}
+          {isBuyer && orderInfo?.paymentStatus === 'PAID' && (
+            <div className="bg-green-100 border border-green-300 rounded-xl px-3 py-2 text-xs font-bold text-green-800 flex items-center gap-2">
+              <CheckCircle2 size={14} /> Đã thanh toán &amp; xác nhận đơn hàng
+            </div>
+          )}
+          {isBuyer && orderInfo?.paymentStatus !== 'PAID' && orderInfo?.selectedMethod === 'COD' && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-700 flex items-center gap-2">
+              <Banknote size={14} /> Đã đặt COD — chờ seller xác nhận
+            </div>
+          )}
+          {isBuyer && orderInfo?.paymentStatus !== 'PAID' && orderInfo?.selectedMethod === 'MOMO' && (
+            <div className="bg-pink-50 border border-pink-200 rounded-xl px-3 py-2 text-xs font-semibold text-pink-700 flex items-center gap-2">
+              <Wallet size={14} /> Đang chuyển sang MoMo...
+            </div>
+          )}
         </div>
       )}
 

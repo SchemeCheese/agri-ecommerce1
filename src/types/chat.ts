@@ -56,7 +56,11 @@ export interface Message {
 
 /** Extract a normalised QuoteData from any message shape (DB flat OR socket nested). */
 export function extractQuote(msg: Message): QuoteData | null {
-  if (msg.quote) return msg.quote;
+  if (msg.quote) {
+    // Một số phiên bản BE emit nested quote KHÔNG kèm messageId — fallback về msg.id
+    // để respondToQuote luôn nhận được id hợp lệ (tránh Prisma crash undefined).
+    return { ...msg.quote, messageId: msg.quote.messageId ?? msg.id };
+  }
   if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.quote_product_id) {
     return {
       messageId:   msg.id,

@@ -12,6 +12,7 @@ export interface SellerProduct {
   description?: string;
   images: string[];
   category?: string;
+  category_id?: number;
   unit?: string;
   origin?: string;
   rating?: number;
@@ -23,16 +24,17 @@ export interface SellerProduct {
   min_negotiation_qty?: number | null;
 }
 
+// Form-side shape — mirrors the BE CreateProductDto exactly. The form fills these
+// fields directly so the submit handler can hand the payload to axios without renaming.
 export interface ProductFormData {
   name: string;
-  price: number;
-  stock: number;
+  reference_price: number;
+  stock_quantity: number;
   description?: string;
   unit?: string;
-  category?: string;
-  origin?: string;
-  images?: string[];
-  image_urls?: string[]; // optional remote URLs user pasted
+  category_id?: number;
+  location?: string;
+  image_urls?: string[];
   /** null = không cho phép thương lượng; số > 0 = ngưỡng tối thiểu */
   min_negotiation_qty?: number | null;
 }
@@ -58,12 +60,12 @@ export function useSellerProducts() {
   const createProduct = async (data: ProductFormData, imageFiles: File[]) => {
     const formData = new FormData();
     formData.append('name', data.name);
-    formData.append('price', String(data.price));
-    formData.append('stock', String(data.stock));
-    if (data.description) formData.append('description', data.description);
-    if (data.unit)        formData.append('unit', data.unit);
-    if (data.category)    formData.append('category', data.category);
-    if (data.origin)      formData.append('origin', data.origin);
+    formData.append('reference_price', String(data.reference_price));
+    formData.append('stock_quantity', String(data.stock_quantity));
+    if (data.description)     formData.append('description', data.description);
+    if (data.unit)            formData.append('unit', data.unit);
+    if (data.category_id != null) formData.append('category_id', String(data.category_id));
+    if (data.location)        formData.append('location', data.location);
     if (data.min_negotiation_qty != null)
       formData.append('min_negotiation_qty', String(data.min_negotiation_qty));
     data.image_urls?.forEach((url) => formData.append('image_urls', url));
@@ -79,13 +81,13 @@ export function useSellerProducts() {
 
   const updateProduct = async (id: string, data: Partial<ProductFormData>, imageFiles?: File[]) => {
     const formData = new FormData();
-    if (data.name !== undefined)        formData.append('name', data.name);
-    if (data.price !== undefined)       formData.append('price', String(data.price));
-    if (data.stock !== undefined)       formData.append('stock', String(data.stock));
-    if (data.description !== undefined) formData.append('description', data.description);
-    if (data.unit !== undefined)        formData.append('unit', data.unit);
-    if (data.category !== undefined)    formData.append('category', data.category);
-    if (data.origin !== undefined)      formData.append('origin', data.origin);
+    if (data.name !== undefined)            formData.append('name', data.name);
+    if (data.reference_price !== undefined) formData.append('reference_price', String(data.reference_price));
+    if (data.stock_quantity !== undefined)  formData.append('stock_quantity', String(data.stock_quantity));
+    if (data.description !== undefined)     formData.append('description', data.description);
+    if (data.unit !== undefined)            formData.append('unit', data.unit);
+    if (data.category_id !== undefined)     formData.append('category_id', String(data.category_id));
+    if (data.location !== undefined)        formData.append('location', data.location);
     if (data.min_negotiation_qty !== undefined)
       formData.append('min_negotiation_qty',
         data.min_negotiation_qty == null ? '' : String(data.min_negotiation_qty));

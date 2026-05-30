@@ -8,7 +8,7 @@ import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container';
 import { 
   MapPin, CreditCard, Loader2, ChevronRight, 
-  Wallet, Building, Truck, ShieldCheck, Package,
+  Wallet, Truck, ShieldCheck, Package,
   X, User, Phone, CheckCircle2, AlertCircle, Ticket, Store, ChevronDown
 } from 'lucide-react';
 import Image from 'next/image';
@@ -59,7 +59,7 @@ function CheckoutPageInner() {
     setMomoStatusMsg('');
     const intervalId = setInterval(async () => {
       try {
-        const res = await api.get('/payments/momo/status', { params: { orderId: pendingOrderId } });
+        const res = await api.get(`/payments/momo/status/${pendingOrderId}`);
         const status = res.data?.paymentStatus;
         if (status === 'PAID') {
           clearInterval(intervalId);
@@ -221,7 +221,7 @@ function CheckoutPageInner() {
     }
     setLoading(true);
     try {
-      const pmMap: Record<string, string> = { cod: 'COD', momo: 'MOMO', zalopay: 'ZALOPAY', bank: 'QR_CODE' };
+      const pmMap: Record<string, string> = { cod: 'COD', momo: 'MOMO' };
       const seller_orders = Object.entries(shopGroups).map(([shopId, shopItems]) => ({
         seller_id: shopId,
         items: shopItems.map(i => ({
@@ -244,19 +244,21 @@ function CheckoutPageInner() {
         }
       }
       if (paymentMethod === 'momo') {
-        const orderId = checkoutRes.data?.order_ids?.[0];
-        if (!orderId) {
-          throw new Error('Không lấy được order_id sau khi đặt hàng.');
+        // Flow nhóm nhiều shop: 1 CheckoutSession ↔ N đơn ↔ 1 giao dịch MoMo.
+        // momoPayment.orderId / pendingOrderId nay giữ checkout_session_id.
+        const sessionId = checkoutRes.data?.checkout_session_id;
+        if (!sessionId) {
+          throw new Error('Không lấy được checkout_session_id sau khi đặt hàng.');
         }
-        const payRes = await api.post('/payments/momo/create', { order_id: orderId });
+        const payRes = await api.post('/payments/momo/create', { checkout_session_id: sessionId });
         setMomoPayment({
-          orderId,
+          orderId: sessionId,
           amount: finalTotal,
           payUrl: payRes.data?.payUrl,
           deeplink: payRes.data?.deeplink,
           qrCodeUrl: payRes.data?.qrCodeUrl,
         });
-        setPendingOrderId(orderId);
+        setPendingOrderId(sessionId);
       } else {
         router.push('/order-confirmation');
       }
@@ -270,10 +272,8 @@ function CheckoutPageInner() {
   if (!mounted) return null;
 
   const paymentMethods = [
-    { id: 'cod',     title: 'Thanh toán khi nhận hàng', sub: 'Tiền mặt (COD)',                icon: <Truck size={18}/>    },
-    { id: 'momo',    title: 'Ví điện tử MoMo',          sub: 'Thanh toán qua app MoMo',        icon: <Wallet size={18}/>   },
-    { id: 'zalopay', title: 'Ví ZaloPay',               sub: 'Thanh toán qua ZaloPay',         icon: <Wallet size={18}/>   },
-    { id: 'bank',    title: 'Chuyển khoản ngân hàng',   sub: 'Internet Banking / QR Code',     icon: <Building size={18}/> },
+    { id: 'cod',  title: 'Thanh toán khi nhận hàng', sub: 'Tiền mặt (COD)',             icon: <Truck size={18}/>  },
+    { id: 'momo', title: 'Ví điện tử MoMo',          sub: 'Thanh toán qua app MoMo',    icon: <Wallet size={18}/> },
   ];
 
   return (
