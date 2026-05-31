@@ -227,6 +227,24 @@ export const NegotiationQuoteCard = ({
     }
   };
 
+  const handleReportIssue = async () => {
+    if (!orderInfo?.orderId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await api.patch(`/orders/${orderInfo.orderId}/report-issue`, {
+        note: 'Báo sự cố: Chưa nhận được hàng trong chat.',
+      });
+      console.log('[NegotiationQuoteCard] Issue reported successfully');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Không thể báo sự cố.';
+      setActionError(typeof message === 'string' ? message : 'Không thể báo sự cố.');
+      console.error('[NegotiationQuoteCard] Report issue error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const effectiveStatus = localQuoteStatus ?? quote.status;
   const total = quote.price * quote.quantity;
   const canContinueToPayment = shippingPhone.trim() && shippingAddress.trim();
@@ -410,14 +428,24 @@ export const NegotiationQuoteCard = ({
                   {currentUser.is_buyer && (
                     <>
                       {liveOrderStatus === 'SHIPPING' && (
-                        <button
-                          onClick={handleCompleteOrder}
-                          disabled={actionLoading}
-                          className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
-                        >
-                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                          Đã nhận được hàng
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={handleCompleteOrder}
+                            disabled={actionLoading}
+                            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
+                          >
+                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            Đã nhận được hàng
+                          </button>
+                          <button
+                            onClick={handleReportIssue}
+                            disabled={actionLoading}
+                            className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-2 rounded-xl text-sm font-bold transition"
+                          >
+                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} />}
+                            Báo sự cố / Chưa nhận hàng
+                          </button>
+                        </div>
                       )}
                     </>
                   )}
