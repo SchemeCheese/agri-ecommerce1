@@ -149,6 +149,18 @@ export default function BuyerChatWidgetPanel({
       const payload = res.data;
       const items = Array.isArray(payload) ? payload : payload?.items ?? [];
       setMessages(items);
+
+      // Extract orderInfo from NEGOTIATION_QUOTE messages and populate orderInfoByQuote
+      const newOrderInfo: Record<string, QuoteOrderInfo> = {};
+      for (const msg of items) {
+        if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.orderInfo && msg.id) {
+          newOrderInfo[msg.id] = msg.orderInfo;
+          console.log('[BuyerChatWidgetPanel] Extracted orderInfo for quote', msg.id, ':', msg.orderInfo);
+        }
+      }
+      if (Object.keys(newOrderInfo).length > 0) {
+        setOrderInfoByQuote((prev) => ({ ...prev, ...newOrderInfo }));
+      }
     } catch {
       setMessages([]);
     } finally {

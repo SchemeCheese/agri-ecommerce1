@@ -973,6 +973,7 @@ function ChatPageInner() {
                                 orderInfo={orderInfoByQuote[quote.messageId]}
                                 onSelectPayment={(method) => handleSelectPayment(quote.messageId, method)}
                                 paymentLoading={payingQuoteId === quote.messageId}
+                                currentUser={user ? { id: user.id, is_buyer: user.is_buyer, is_seller: user.is_seller } : undefined}
                               />
                             </div>
                           </div>

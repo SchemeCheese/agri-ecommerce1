@@ -56,6 +56,7 @@ export default function SellerChatPage() {
   const [mobileView,    setMobileView]    = useState<'list' | 'chat'>('list');
   const [negotiationCancelledFor, setNegotiationCancelledFor] = useState<Set<string>>(new Set());
   const [sellerProducts, setSellerProducts] = useState<SellerProductOption[]>([]);
+  const [orderInfoByQuote, setOrderInfoByQuote] = useState<Record<string, any>>({});
 
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -92,6 +93,18 @@ export default function SellerChatPage() {
       const payload = res.data;
       const items = Array.isArray(payload) ? payload : payload?.items ?? [];
       setMessages(items);
+
+      // Extract orderInfo from NEGOTIATION_QUOTE messages
+      const newOrderInfo: Record<string, any> = {};
+      for (const msg of items) {
+        if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.orderInfo && msg.id) {
+          newOrderInfo[msg.id] = msg.orderInfo;
+          console.log('[SellerChat] Extracted orderInfo for quote', msg.id, ':', msg.orderInfo);
+        }
+      }
+      if (Object.keys(newOrderInfo).length > 0) {
+        setOrderInfoByQuote((prev) => ({ ...prev, ...newOrderInfo }));
+      }
     } catch { setMessages([]); }
     finally { setLoadingMsgs(false); }
   }, []);
@@ -600,6 +613,8 @@ export default function SellerChatPage() {
                         <NegotiationQuoteCard
                           quote={quote}
                           isBuyer={false}  // seller view → no accept/reject buttons
+                          orderInfo={orderInfoByQuote[msg.id]}
+                          currentUser={user ? { id: user.id, is_buyer: user.is_buyer, is_seller: user.is_seller } : undefined}
                         />
                       </div>
                     </div>
