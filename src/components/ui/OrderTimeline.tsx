@@ -12,9 +12,10 @@ const STATUS_ORDER = ['PENDING', 'CONFIRMED', 'SHIPPING', 'COMPLETED'];
 
 interface OrderTimelineProps {
   currentStatus: string;
+  compact?: boolean;
 }
 
-export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
+export function OrderTimeline({ currentStatus, compact = false }: OrderTimelineProps) {
   const isCancelled     = currentStatus === 'CANCELLED';
   const isFailed        = currentStatus === 'FAILED';
   const isIssueReported = currentStatus === 'ISSUE_REPORTED';
@@ -37,6 +38,43 @@ export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
       <div className="flex items-center justify-center gap-3 py-3 px-4 bg-red-50 rounded-xl border border-red-200">
         <XCircle size={18} className="text-red-500 flex-shrink-0" />
         <p className="text-sm font-bold text-red-600">Giao hàng thất bại</p>
+      </div>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-2">
+        {STEPS.map((step, idx) => {
+          const isCompleted = idx <= currentIndex;
+          const isActive = idx === currentIndex;
+          const Icon = step.icon;
+
+          return (
+            <React.Fragment key={step.status}>
+              <div className="flex flex-col items-center flex-shrink-0">
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all text-xs font-semibold ${
+                    isActive && isIssueReported
+                      ? 'bg-orange-500 text-white'
+                      : isCompleted
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  <Icon size={13} />
+                </div>
+              </div>
+
+              {idx < STEPS.length - 1 && (
+                <div className="flex-1 h-0.5 bg-gray-200" style={{
+                  background: idx < currentIndex ? '#16a34a' : '#e5e7eb',
+                  minWidth: '8px'
+                }} />
+              )}
+            </React.Fragment>
+          );
+        })}
       </div>
     );
   }

@@ -8,6 +8,7 @@ import { formatCurrency } from '@/utils/vi';
 import api from '@/lib/axios';
 import QRCode from 'react-qr-code';
 import { OrderTimeline } from '../ui/OrderTimeline';
+import { formatOrderStatus } from '@/utils/vi';
 import { io } from 'socket.io-client';
 
 type CheckoutStep = 'PRESHOW' | 'PAYMENT' | 'SUCCESS';
@@ -23,23 +24,17 @@ type CheckoutOrderData = {
   qrCodeUrl?: string;
 };
 
+type CurrentUser = {
+  id: string;
+  is_buyer: boolean;
+  is_seller: boolean;
+};
+
 const isHttpImageUrl = (value: unknown): value is string =>
   typeof value === 'string' && /^https?:\/\//i.test(value);
 
 const formatOrderStatusLabel = (status: string): string => {
-  const statusLabels: Record<string, string> = {
-    PENDING: 'Chờ xác nhận',
-    CONFIRMED: 'Đã xác nhận',
-    SHIPPING: 'Đang giao hàng',
-    COMPLETED: 'Đã hoàn thành',
-    CANCELLED: 'Đã hủy',
-    ISSUE_REPORTED: 'Báo sự cố',
-    RETURNED: 'Đã trả lại',
-    REFUND_PENDING: 'Chờ hoàn tiền',
-    FAILED: 'Thất bại',
-    REFUNDED: 'Đã hoàn tiền',
-  };
-  return statusLabels[status] || status;
+  return formatOrderStatus(status);
 };
 
 // Thông tin Order do BE tạo ngay khi buyer ACCEPT báo giá (gửi qua WS event
@@ -69,6 +64,8 @@ interface Props {
   onSelectPayment?: (method: 'COD' | 'MOMO') => void;
   /** Đang gọi API select-payment (disable button + spinner) */
   paymentLoading?: boolean;
+  /** Current user info for role-based actions */
+  currentUser?: CurrentUser;
 }
 
 export const NegotiationQuoteCard = ({
@@ -79,6 +76,7 @@ export const NegotiationQuoteCard = ({
   orderInfo,
   onSelectPayment,
   paymentLoading,
+  currentUser,
 }: Props) => {
   const [showPaymentPopover, setShowPaymentPopover] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('PRESHOW');
@@ -92,6 +90,8 @@ export const NegotiationQuoteCard = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkoutOrder, setCheckoutOrder] = useState<CheckoutOrderData | null>(null);
   const [liveOrderStatus, setLiveOrderStatus] = useState<string | null>(orderInfo?.orderStatus ?? null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (quote.status !== 'PENDING') {
@@ -177,6 +177,55 @@ export const NegotiationQuoteCard = ({
       setCheckoutOrder(null);
     }
   }, [showPaymentPopover, checkoutStep]);
+
+  // Action handlers for order status updates
+  const handleConfirmOrder = async () => {
+    if (!orderInfo?.orderId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await api.post(`/orders/${orderInfo.orderId}/confirm`);
+      console.log('[NegotiationQuoteCard] Order confirmed successfully');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Không thể xác nhận đơn hàng.';
+      setActionError(typeof message === 'string' ? message : 'Không thể xác nhận đơn hàng.');
+      console.error('[NegotiationQuoteCard] Confirm order error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleShipOrder = async () => {
+    if (!orderInfo?.orderId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await api.post(`/orders/${orderInfo.orderId}/ship`);
+      console.log('[NegotiationQuoteCard] Order shipped successfully');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Không thể giao hàng.';
+      setActionError(typeof message === 'string' ? message : 'Không thể giao hàng.');
+      console.error('[NegotiationQuoteCard] Ship order error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCompleteOrder = async () => {
+    if (!orderInfo?.orderId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await api.post(`/orders/${orderInfo.orderId}/complete`);
+      console.log('[NegotiationQuoteCard] Order completed successfully');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Không thể hoàn tất đơn hàng.';
+      setActionError(typeof message === 'string' ? message : 'Không thể hoàn tất đơn hàng.');
+      console.error('[NegotiationQuoteCard] Complete order error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const effectiveStatus = localQuoteStatus ?? quote.status;
   const total = quote.price * quote.quantity;
@@ -323,10 +372,64 @@ export const NegotiationQuoteCard = ({
                 </span>
               </div>
 
-              {/* Mini Order Timeline */}
-              <div className="bg-white border border-gray-100 rounded-xl p-3">
-                <OrderTimeline currentStatus={liveOrderStatus} />
+              {/* Mini Order Timeline (Compact) */}
+              <div className="bg-white border border-gray-100 rounded-xl p-2">
+                <OrderTimeline currentStatus={liveOrderStatus} compact={true} />
               </div>
+
+              {/* Action Buttons - Role Based */}
+              {currentUser && (
+                <div className="space-y-2">
+                  {/* Seller Actions */}
+                  {currentUser.is_seller && (
+                    <>
+                      {liveOrderStatus === 'PENDING' && (
+                        <button
+                          onClick={handleConfirmOrder}
+                          disabled={actionLoading}
+                          className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                          Xác nhận đơn
+                        </button>
+                      )}
+                      {liveOrderStatus === 'CONFIRMED' && (
+                        <button
+                          onClick={handleShipOrder}
+                          disabled={actionLoading}
+                          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+                          Giao hàng
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* Buyer Actions */}
+                  {currentUser.is_buyer && (
+                    <>
+                      {liveOrderStatus === 'SHIPPING' && (
+                        <button
+                          onClick={handleCompleteOrder}
+                          disabled={actionLoading}
+                          className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                          Đã nhận được hàng
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Action Error */}
+              {actionError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {actionError}
+                </div>
+              )}
             </div>
           )}
 
