@@ -7,6 +7,8 @@ import { QuoteData } from '@/types/chat';
 import { formatCurrency } from '@/utils/vi';
 import api from '@/lib/axios';
 import QRCode from 'react-qr-code';
+import { OrderTimeline } from '../ui/OrderTimeline';
+import { io } from 'socket.io-client';
 
 type CheckoutStep = 'PRESHOW' | 'PAYMENT' | 'SUCCESS';
 
@@ -23,6 +25,22 @@ type CheckoutOrderData = {
 
 const isHttpImageUrl = (value: unknown): value is string =>
   typeof value === 'string' && /^https?:\/\//i.test(value);
+
+const formatOrderStatusLabel = (status: string): string => {
+  const statusLabels: Record<string, string> = {
+    PENDING: 'Chờ xác nhận',
+    CONFIRMED: 'Đã xác nhận',
+    SHIPPING: 'Đang giao hàng',
+    COMPLETED: 'Đã hoàn thành',
+    CANCELLED: 'Đã hủy',
+    ISSUE_REPORTED: 'Báo sự cố',
+    RETURNED: 'Đã trả lại',
+    REFUND_PENDING: 'Chờ hoàn tiền',
+    FAILED: 'Thất bại',
+    REFUNDED: 'Đã hoàn tiền',
+  };
+  return statusLabels[status] || status;
+};
 
 // Thông tin Order do BE tạo ngay khi buyer ACCEPT báo giá (gửi qua WS event
 // `quoteAccepted`). Nếu có → card show payment selector inline thay vì
@@ -73,12 +91,80 @@ export const NegotiationQuoteCard = ({
   const [checkoutNote, setCheckoutNote] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkoutOrder, setCheckoutOrder] = useState<CheckoutOrderData | null>(null);
+  const [liveOrderStatus, setLiveOrderStatus] = useState<string | null>(orderInfo?.orderStatus ?? null);
 
   useEffect(() => {
     if (quote.status !== 'PENDING') {
+      console.log('[NegotiationQuoteCard] Quote status changed:', quote.status);
       setLocalQuoteStatus(quote.status);
     }
   }, [quote.status]);
+
+  useEffect(() => {
+    console.log('[NegotiationQuoteCard] Component mounted. orderInfo:', orderInfo);
+    console.log('[NegotiationQuoteCard] Initial liveOrderStatus:', orderInfo?.orderStatus);
+    console.log('[NegotiationQuoteCard] Quote status:', quote.status);
+    console.log('[NegotiationQuoteCard] IsBuyer:', isBuyer);
+  }, []);
+
+  useEffect(() => {
+    console.log('[NegotiationQuoteCard] liveOrderStatus changed:', liveOrderStatus);
+  }, [liveOrderStatus]);
+
+  // Listen to order status updates from backend via socket
+  useEffect(() => {
+    if (!orderInfo?.orderId) {
+      console.log('[NegotiationQuoteCard] Socket listener skipped: no orderInfo.orderId');
+      return;
+    }
+
+    console.log('[NegotiationQuoteCard] 🔌 Initializing socket listener for orderInfo.orderId:', orderInfo.orderId);
+
+    const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    if (!token) {
+      console.warn('[NegotiationQuoteCard] ❌ No access token found in localStorage');
+      return;
+    }
+
+    console.log('[NegotiationQuoteCard] 📡 Connecting to Socket.io at:', SOCKET_URL);
+
+    const socket = io(SOCKET_URL, {
+      auth: { token: `Bearer ${token}` },
+      transports: ['websocket'],
+      reconnection: true,
+    });
+
+    socket.on('connect', () => {
+      console.log('[NegotiationQuoteCard] ✅ Socket connected:', socket.id);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('[NegotiationQuoteCard] 🔌 Socket disconnected. Reason:', reason);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('[NegotiationQuoteCard] ❌ Socket connection error:', error);
+    });
+
+    socket.on('orderStatusUpdated', (payload: any) => {
+      console.log('[NegotiationQuoteCard] 📦 Received orderStatusUpdated event:', payload);
+      console.log('[NegotiationQuoteCard] Checking match: payload.orderId =', payload.orderId, ' vs orderInfo.orderId =', orderInfo.orderId);
+
+      if (payload.orderId === orderInfo.orderId) {
+        console.log('[NegotiationQuoteCard] ✅ ORDER MATCH! Updating liveOrderStatus to:', payload.newStatus);
+        setLiveOrderStatus(payload.newStatus);
+      } else {
+        console.log('[NegotiationQuoteCard] ⚠️ Order ID mismatch. Ignoring this event.');
+      }
+    });
+
+    return () => {
+      console.log('[NegotiationQuoteCard] 🧹 Cleaning up socket listener');
+      socket.disconnect();
+    };
+  }, [orderInfo?.orderId]);
 
   useEffect(() => {
     if (!showPaymentPopover) return;
@@ -133,10 +219,9 @@ export const NegotiationQuoteCard = ({
     setSubmitError(null);
     try {
       const payload = buildCheckoutPayload();
-      const { data } = await api.post('/orders/checkout-quote', payload, {
+      const { data: responseData } = await api.post('/orders/checkout-quote', payload, {
         timeout: 30000,
       });
-      const responseData: CheckoutOrderData = data ?? {};
 
       setChosenPaymentMethod(paymentMethod);
       setLocalQuoteStatus('ACCEPTED');
@@ -152,11 +237,11 @@ export const NegotiationQuoteCard = ({
       });
 
       if (paymentMethod === 'MOMO') {
-        if (!responseData.payUrl && !responseData.deeplink && !responseData.qrCodeUrl) {
-          setSubmitError('MoMo chưa trả về mã thanh toán. Vui lòng thử lại.');
+        if (!responseData?.payUrl) {
+          setSubmitError('MoMo chưa trả về payUrl. Vui lòng thử lại.');
           return;
         }
-        setCheckoutStep('PAYMENT');
+        window.location.href = responseData.payUrl;
         return;
       }
 
@@ -225,18 +310,36 @@ export const NegotiationQuoteCard = ({
 
       {effectiveStatus === 'ACCEPTED' && (
         <div className="space-y-2.5">
-          {/* Status badge — luôn hiển thị, kể cả khi chưa có orderInfo (legacy / race) */}
-          <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-xl text-xs font-bold border border-green-200">
-            <CheckCircle2 size={15} />
-            <span>Đã chấp nhận</span>
-            {orderInfo && (
-              <span className="ml-auto text-[10px] font-semibold text-green-600/80 tracking-wide">
-                #{orderInfo.orderId.slice(-6).toUpperCase()}
-              </span>
-            )}
-          </div>
+          {/* Live Order Tracker — when orderInfo exists */}
+          {orderInfo && liveOrderStatus && (
+            <div className="space-y-2.5">
+              {console.log('[NegotiationQuoteCard] Rendering Live Order Tracker. orderInfo.orderId:', orderInfo.orderId, 'liveOrderStatus:', liveOrderStatus)}
+              {/* Status Badge */}
+              <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2.5 rounded-xl text-xs font-bold border border-blue-200">
+                <Package size={15} />
+                <span>Đơn hàng: {formatOrderStatusLabel(liveOrderStatus)}</span>
+                <span className="ml-auto text-[10px] font-semibold text-blue-600/80 tracking-wide">
+                  #{orderInfo.orderId.slice(-6).toUpperCase()}
+                </span>
+              </div>
 
-          {isBuyer && chosenPaymentMethod && (
+              {/* Mini Order Timeline */}
+              <div className="bg-white border border-gray-100 rounded-xl p-3">
+                <OrderTimeline currentStatus={liveOrderStatus} />
+              </div>
+            </div>
+          )}
+
+          {/* Static accepted badge — fallback if no orderInfo yet (race condition) */}
+          {!orderInfo && (
+            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-xl text-xs font-bold border border-green-200">
+              {console.log('[NegotiationQuoteCard] Rendering static ACCEPTED badge (no orderInfo yet)')}
+              <CheckCircle2 size={15} />
+              <span>Đã chấp nhận</span>
+            </div>
+          )}
+
+          {isBuyer && chosenPaymentMethod && !orderInfo && (
             <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-700 flex items-center gap-2">
               <Info size={14} className="text-gray-400" />
               {chosenPaymentMethod === 'COD' ? 'Đã đặt COD, seller sẽ xác nhận đơn trong chat.' : 'Đã xác nhận MoMo, đang chuyển hướng thanh toán.'}

@@ -13,13 +13,15 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, Wallet, Banknote, AlertCircle,
-  Package, MapPin, Receipt, CheckCircle2,
+import React, { useEffect, useMemo, useState } from 'react';
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { resolveImageUrl } from '@/lib/runtime-config';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from '@/components/ui/dialog';
+  ArrowLeft, Loader2, Wallet, Banknote, AlertCircle,
+  Package, MapPin, Receipt, CheckCircle2, CircleDot, Circle,
+  Truck, ShieldCheck, Clock3, BadgeCheck, CreditCard, TicketPercent,
+  ChevronRight,
 
 type OrderItem = {
   id: string;
@@ -31,9 +33,10 @@ type Payment = { id: string; payment_method: string; status: string; amount: num
 type Order = {
   id: string;
   status: string;
-  payment_method: string;
+  product: { id: string; name: string; unit?: string; reference_price?: number | string; images?: string[] };
   final_total_price: number | string;
-  shipping_address: string;
+type Payment = { id: string; payment_method: string; status: string; amount: number | string; type?: string; transaction_ref?: string | null; created_at?: string; updated_at?: string };
+type Voucher = { id: string; code: string; discount_type: 'PERCENT' | 'FIXED'; discount_value: number | string; max_discount_amount?: number | string | null; min_order_value?: number | string | null };
   created_at: string;
   note?: string;
   order_items: OrderItem[];
@@ -41,13 +44,27 @@ type Order = {
   seller?: { full_name?: string; profile?: { store_name?: string } };
 };
 
+  updated_at?: string;
+  shipped_at?: string | null;
+  note?: string | null;
+  tracking_code?: string | null;
+  discount_amount?: number | string | null;
+  voucher?: Voucher | null;
+  checkout_session?: { id: string; total_amount: number | string; status: string; momo_trans_id?: string | null; created_at: string; updated_at: string } | null;
 const formatVnd = (n: number | string) => `${Number(n).toLocaleString('vi-VN')} đ`;
-
+  items: OrderItem[];
 export default function OrderDetailsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const orderId = params?.id;
 
+
+const STATUS_STEPS: Array<{ key: string; label: string; icon: React.ReactNode }> = [
+  { key: 'PENDING', label: 'Chờ xác nhận', icon: <Clock3 size={14} /> },
+  { key: 'CONFIRMED', label: 'Đang xử lý', icon: <BadgeCheck size={14} /> },
+  { key: 'SHIPPING', label: 'Đang giao hàng', icon: <Truck size={14} /> },
+  { key: 'COMPLETED', label: 'Đã hoàn thành', icon: <ShieldCheck size={14} /> },
+];
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -58,8 +75,8 @@ export default function OrderDetailsPage() {
 
   const refresh = async () => {
     try {
-      const res = await api.get<Order[]>('/orders/my-orders');
-      const match = res.data?.find((o) => o.id === orderId) ?? null;
+      const res = await api.get<Order>(`/orders/${orderId}`);
+      const match = res.data ?? null;
       if (!match) setError('Không tìm thấy đơn hàng.');
       setOrder(match);
     } catch (err: any) {
@@ -79,6 +96,23 @@ export default function OrderDetailsPage() {
     order.payment_method === 'MOMO' &&
     payment?.status === 'UNPAID'
   , [order, payment]);
+
+  const subtotal = useMemo(() => {
+    if (!order) return 0;
+    return order.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.negotiated_price), 0);
+  }, [order]);
+
+  const discountAmount = Number(order?.discount_amount ?? 0);
+  const finalTotal = Number(order?.final_total_price ?? 0);
+
+  const timelineStepIndex = useMemo(() => {
+    const index = STATUS_STEPS.findIndex((step) => step.key === order?.status);
+    if (index >= 0) return index;
+    if (order?.status === 'CANCELLED' || order?.status === 'FAILED' || order?.status === 'RETURNED' || order?.status === 'REFUND_PENDING' || order?.status === 'REFUNDED') {
+      return -1;
+    }
+    return 0;
+  }, [order?.status]);
 
   const handleRetryPay = async () => {
     if (!order) return;
@@ -144,17 +178,22 @@ export default function OrderDetailsPage() {
         Danh sách đơn hàng
       </button>
 
-      <header className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <header className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Đơn hàng #{order.id.slice(0, 8)}</h1>
             <p className="text-sm text-gray-500 mt-1">Đặt ngày {new Date(order.created_at).toLocaleString('vi-VN')}</p>
+            {order.checkout_session?.id && (
+              <p className="text-xs text-gray-400 mt-1">Phiên thanh toán: {order.checkout_session.id.slice(-8).toUpperCase()}</p>
+            )}
           </div>
           <StatusBadge status={order.status} paymentStatus={payment?.status} />
         </div>
 
+        <OrderTimeline currentIndex={timelineStepIndex} currentStatus={order.status} />
+
         {isAwaitingMomo && (
-          <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1 text-sm">
@@ -191,12 +230,13 @@ export default function OrderDetailsPage() {
       <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
         <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">
           <Package size={20} className="text-green-600" />
-          Sản phẩm ({order.order_items.length})
+          Sản phẩm ({order.items.length})
         </h2>
         <p className="text-sm text-gray-500">Người bán: <b>{sellerName}</b></p>
         <div className="divide-y divide-gray-100">
-          {order.order_items.map((it) => {
+          {order.items.map((it) => {
             const img = it.product.images?.[0];
+            const lineTotal = Number(it.quantity) * Number(it.negotiated_price);
             return (
               <div key={it.id} className="flex items-center gap-3 py-3">
                 <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
@@ -208,12 +248,30 @@ export default function OrderDetailsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 truncate">{it.product.name}</p>
-                  <p className="text-xs text-gray-500">x {it.quantity} · {formatVnd(it.negotiated_price)}</p>
+                  <p className="text-xs text-gray-500">x {it.quantity} · {formatVnd(it.negotiated_price)}{it.product.unit ? ` / ${it.product.unit}` : ''}</p>
                 </div>
-                <p className="font-semibold text-gray-900">{formatVnd(Number(it.quantity) * Number(it.negotiated_price))}</p>
+                <p className="font-semibold text-gray-900">{formatVnd(lineTotal)}</p>
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+          <Receipt size={20} className="text-purple-500" />
+          Tài chính
+        </h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between gap-4"><span className="text-gray-500">Tạm tính</span><span className="font-medium">{formatVnd(subtotal)}</span></div>
+          <div className="flex justify-between gap-4"><span className="text-gray-500">Giảm giá voucher</span><span className="font-medium text-rose-600">- {formatVnd(discountAmount)}</span></div>
+          <div className="flex justify-between gap-4 pt-2 border-t border-gray-100 text-base"><span className="font-semibold">Tổng cuối</span><span className="font-bold text-green-700">{formatVnd(finalTotal)}</span></div>
+          {order.voucher && (
+            <div className="flex items-center gap-2 pt-2 text-xs text-gray-500">
+              <TicketPercent size={14} className="text-emerald-600" />
+              Áp dụng mã <span className="font-semibold text-gray-700">{order.voucher.code}</span>
+            </div>
+          )}
         </div>
       </section>
 
@@ -222,7 +280,11 @@ export default function OrderDetailsPage() {
           <MapPin size={20} className="text-red-500" />
           Địa chỉ giao hàng
         </h2>
-        <p className="text-sm text-gray-700">{order.shipping_address}</p>
+        <div className="text-sm text-gray-700 space-y-1">
+          <p>{order.shipping_address}</p>
+          {order.tracking_code && <p className="text-gray-500">Mã vận đơn: {order.tracking_code}</p>}
+          {order.note && <p className="text-gray-500">Ghi chú: {order.note}</p>}
+        </div>
       </section>
 
       <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-3">
@@ -234,6 +296,7 @@ export default function OrderDetailsPage() {
           <div className="flex justify-between"><span className="text-gray-500">Phương thức</span><span className="font-medium">{order.payment_method}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">Trạng thái thanh toán</span><span className="font-medium">{payment?.status ?? '—'}</span></div>
           <div className="flex justify-between text-base pt-2 border-t"><span className="font-semibold">Tổng cộng</span><span className="font-bold text-green-700">{formatVnd(order.final_total_price)}</span></div>
+          {payment?.transaction_ref && <div className="flex justify-between"><span className="text-gray-500">Mã giao dịch</span><span className="font-medium break-all text-right">{payment.transaction_ref}</span></div>}
         </div>
       </section>
 
@@ -274,6 +337,39 @@ export default function OrderDetailsPage() {
     </div>
   );
 }
+
+const OrderTimeline = ({ currentIndex, currentStatus }: { currentIndex: number; currentStatus: string }) => {
+  const steps = [
+    { key: 'PENDING', label: 'Chờ xác nhận', icon: <Clock3 size={14} /> },
+    { key: 'CONFIRMED', label: 'Đang xử lý', icon: <BadgeCheck size={14} /> },
+    { key: 'SHIPPING', label: 'Đang giao hàng', icon: <Truck size={14} /> },
+    { key: 'COMPLETED', label: 'Đã hoàn thành', icon: <ShieldCheck size={14} /> },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-4">
+        <CircleDot size={16} className="text-green-600" />
+        Lộ trình đơn hàng
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        {steps.map((step, index) => {
+          const active = currentIndex >= index;
+          const current = currentStatus === step.key;
+          return (
+            <div key={step.key} className={`rounded-2xl border px-3 py-3 ${current ? 'border-green-500 bg-green-50' : active ? 'border-green-200 bg-white' : 'border-gray-200 bg-white'}`}>
+              <div className={`inline-flex h-8 w-8 items-center justify-center rounded-full mb-2 ${active ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                {step.icon}
+              </div>
+              <p className={`text-sm font-semibold ${active ? 'text-gray-900' : 'text-gray-500'}`}>{step.label}</p>
+              <p className="text-xs text-gray-400 mt-1">{current ? 'Hiện tại' : active ? 'Đã qua' : 'Chờ tới bước này'}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const StatusBadge = ({ status, paymentStatus }: { status: string; paymentStatus?: string }) => {
   // Awaiting-payment is the most actionable state — surface it as its own badge.

@@ -242,16 +242,21 @@ export default function BuyerChatWidgetPanel({
     // /checkout nữa, chỉ lưu orderInfo để card render Pay Now selector inline.
     // Event `quoteAccepted` (đổi tên từ `negotiationAccepted` cho rõ semantic).
     socket.on('quoteAccepted', (payload: QuoteAcceptedPayload) => {
+      console.log('[BuyerChatWidgetPanel] 📝 quoteAccepted event:', payload);
       setOrderInfoByQuote((prev) => ({
         ...prev,
         [payload.messageId]: {
+          id: payload.orderId,
           orderId:           payload.orderId,
           checkoutSessionId: payload.checkoutSessionId,
           totalAmount:       payload.totalAmount,
           awaitsPaymentSelection: payload.awaitsPaymentSelection,
           selectedMethod:    null,
+          orderStatus:       'PENDING',
+          paymentStatus:     'UNPAID',
         },
       }));
+      console.log('[BuyerChatWidgetPanel] ✅ OrderInfo set for quote', payload.messageId);
     });
 
     // ACCEPT bị BE chặn (vd MISSING_SHIPPING_ADDRESS) — bật modal bắt buyer cập
@@ -266,22 +271,30 @@ export default function BuyerChatWidgetPanel({
     // Order=CONFIRMED. FE tìm quote có orderId khớp rồi update paymentStatus/
     // orderStatus để card chuyển sang "Đã thanh toán & xác nhận" tự động.
     socket.on('orderStatusUpdated', (payload: OrderStatusUpdatedPayload) => {
+      console.log('[BuyerChatWidgetPanel] 📦 orderStatusUpdated event:', payload);
       setOrderInfoByQuote((prev) => {
         const next = { ...prev };
         let matchedMessageId: string | null = null;
         for (const [msgId, info] of Object.entries(prev)) {
+          console.log('[BuyerChatWidgetPanel] Checking quote', msgId, 'orderId:', info.orderId, 'vs payload:', payload.orderId);
           if (info.orderId === payload.orderId) {
             matchedMessageId = msgId;
+            console.log('[BuyerChatWidgetPanel] ✅ Found matching quote:', msgId);
             next[msgId] = {
               ...info,
               paymentStatus: payload.paymentStatus ?? info.paymentStatus,
               orderStatus:   payload.orderStatus   ?? info.orderStatus,
             };
+            console.log('[BuyerChatWidgetPanel] Updated orderInfo:', next[msgId]);
             break;
           }
         }
+        if (!matchedMessageId) {
+          console.warn('[BuyerChatWidgetPanel] ⚠️ No matching quote found for orderId:', payload.orderId);
+        }
         // Tắt overlay MoMo nếu update này là cho order đang redirect
         if (matchedMessageId && payload.paymentStatus === 'PAID') {
+          console.log('[BuyerChatWidgetPanel] Dismissing MoMo redirect overlay');
           setMomoRedirecting(false);
         }
         return next;
