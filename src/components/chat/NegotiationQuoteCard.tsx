@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, XCircle, ClipboardList, Wallet, Banknote, Loader2, X, Info, ArrowRight, Package, MapPin, ReceiptText, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, ClipboardList, Wallet, Banknote, Loader2, Info, ArrowRight, Package, MapPin, ReceiptText, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import { QuoteData } from '@/types/chat';
 import { formatCurrency } from '@/utils/vi';
@@ -9,7 +9,10 @@ import api from '@/lib/axios';
 import QRCode from 'react-qr-code';
 import { OrderTimeline } from '../ui/OrderTimeline';
 import { formatOrderStatus } from '@/utils/vi';
+import { SellerOrderActionsCard } from './SellerOrderActionsCard';
+import { BuyerOrderActionsCard } from './BuyerOrderActionsCard';
 import { io } from 'socket.io-client';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 type CheckoutStep = 'PRESHOW' | 'PAYMENT' | 'SUCCESS';
 
@@ -90,8 +93,6 @@ export const NegotiationQuoteCard = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkoutOrder, setCheckoutOrder] = useState<CheckoutOrderData | null>(null);
   const [liveOrderStatus, setLiveOrderStatus] = useState<string | null>(orderInfo?.orderStatus ?? null);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (quote.status !== 'PENDING') {
@@ -179,72 +180,6 @@ export const NegotiationQuoteCard = ({
   }, [showPaymentPopover, checkoutStep]);
 
   // Action handlers for order status updates
-  const handleConfirmOrder = async () => {
-    if (!orderInfo?.orderId) return;
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await api.post(`/orders/${orderInfo.orderId}/confirm`);
-      console.log('[NegotiationQuoteCard] Order confirmed successfully');
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Không thể xác nhận đơn hàng.';
-      setActionError(typeof message === 'string' ? message : 'Không thể xác nhận đơn hàng.');
-      console.error('[NegotiationQuoteCard] Confirm order error:', err);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleShipOrder = async () => {
-    if (!orderInfo?.orderId) return;
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await api.post(`/orders/${orderInfo.orderId}/ship`);
-      console.log('[NegotiationQuoteCard] Order shipped successfully');
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Không thể giao hàng.';
-      setActionError(typeof message === 'string' ? message : 'Không thể giao hàng.');
-      console.error('[NegotiationQuoteCard] Ship order error:', err);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleCompleteOrder = async () => {
-    if (!orderInfo?.orderId) return;
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await api.post(`/orders/${orderInfo.orderId}/complete`);
-      console.log('[NegotiationQuoteCard] Order completed successfully');
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Không thể hoàn tất đơn hàng.';
-      setActionError(typeof message === 'string' ? message : 'Không thể hoàn tất đơn hàng.');
-      console.error('[NegotiationQuoteCard] Complete order error:', err);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleReportIssue = async () => {
-    if (!orderInfo?.orderId) return;
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await api.patch(`/orders/${orderInfo.orderId}/report-issue`, {
-        note: 'Báo sự cố: Chưa nhận được hàng trong chat.',
-      });
-      console.log('[NegotiationQuoteCard] Issue reported successfully');
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Không thể báo sự cố.';
-      setActionError(typeof message === 'string' ? message : 'Không thể báo sự cố.');
-      console.error('[NegotiationQuoteCard] Report issue error:', err);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const effectiveStatus = localQuoteStatus ?? quote.status;
   const total = quote.price * quote.quantity;
   const canContinueToPayment = shippingPhone.trim() && shippingAddress.trim();
@@ -398,64 +333,21 @@ export const NegotiationQuoteCard = ({
               {/* Action Buttons - Role Based */}
               {currentUser && (
                 <div className="space-y-2">
-                  {/* Seller Actions */}
+                  {/* Seller Actions Card */}
                   {currentUser.is_seller && (
-                    <>
-                      {liveOrderStatus === 'PENDING' && (
-                        <button
-                          onClick={handleConfirmOrder}
-                          disabled={actionLoading}
-                          className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
-                        >
-                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                          Xác nhận đơn
-                        </button>
-                      )}
-                      {liveOrderStatus === 'CONFIRMED' && (
-                        <button
-                          onClick={handleShipOrder}
-                          disabled={actionLoading}
-                          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
-                        >
-                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
-                          Giao hàng
-                        </button>
-                      )}
-                    </>
+                    <SellerOrderActionsCard
+                      orderId={orderInfo.orderId}
+                      currentStatus={liveOrderStatus}
+                    />
                   )}
 
-                  {/* Buyer Actions */}
+                  {/* Buyer Actions Card */}
                   {currentUser.is_buyer && (
-                    <>
-                      {liveOrderStatus === 'SHIPPING' && (
-                        <div className="space-y-2">
-                          <button
-                            onClick={handleCompleteOrder}
-                            disabled={actionLoading}
-                            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white py-2 rounded-xl text-sm font-bold transition"
-                          >
-                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                            Đã nhận được hàng
-                          </button>
-                          <button
-                            onClick={handleReportIssue}
-                            disabled={actionLoading}
-                            className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-2 rounded-xl text-sm font-bold transition"
-                          >
-                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} />}
-                            Báo sự cố / Chưa nhận hàng
-                          </button>
-                        </div>
-                      )}
-                    </>
+                    <BuyerOrderActionsCard
+                      orderId={orderInfo.orderId}
+                      currentStatus={liveOrderStatus}
+                    />
                   )}
-                </div>
-              )}
-
-              {/* Action Error */}
-              {actionError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {actionError}
                 </div>
               )}
             </div>
@@ -538,28 +430,23 @@ export const NegotiationQuoteCard = ({
         </div>
       )}
 
-      {showPaymentPopover && isBuyer && effectiveStatus === 'PENDING' && (
-        <div className="fixed inset-0 z-[60] bg-black/40 px-4 py-6 flex items-end sm:items-center justify-center" onClick={(e) => {
-          if (e.target === e.currentTarget && !submittingCheckout) setShowPaymentPopover(false);
-        }}>
-          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[70vh]">
+      {/* Checkout popover — Shadcn Dialog (Portal) để KHÔNG bị clip bởi
+          containing-block transform của chat widget (modal `fixed` cũ bị cắt). */}
+      <Dialog
+        open={showPaymentPopover && isBuyer && effectiveStatus === 'PENDING'}
+        onOpenChange={(open) => { if (!open && !submittingCheckout) setShowPaymentPopover(false); }}
+      >
+        <DialogContent className="p-0 gap-0 max-w-md max-h-[80vh] overflow-hidden flex flex-col rounded-3xl">
+          <div className="w-full bg-white overflow-hidden flex flex-col max-h-[80vh]">
             <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-orange-500 font-bold">Thanh toán trong chat</p>
-                <h3 className="text-lg font-black text-gray-900 mt-0.5">
+                <DialogTitle className="text-lg font-black text-gray-900 mt-0.5">
                   {checkoutStep === 'PRESHOW' && 'Rà soát đơn hàng'}
                   {checkoutStep === 'PAYMENT' && 'Chọn phương thức thanh toán'}
                   {checkoutStep === 'SUCCESS' && 'Đặt hàng thành công'}
-                </h3>
+                </DialogTitle>
               </div>
-              <button
-                type="button"
-                onClick={() => !submittingCheckout && setShowPaymentPopover(false)}
-                className="p-2 rounded-xl hover:bg-gray-100 text-gray-500"
-                aria-label="Đóng"
-              >
-                <X size={18} />
-              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
@@ -804,8 +691,8 @@ export const NegotiationQuoteCard = ({
               )}
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
