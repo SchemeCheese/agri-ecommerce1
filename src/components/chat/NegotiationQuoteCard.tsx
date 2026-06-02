@@ -40,6 +40,14 @@ const formatOrderStatusLabel = (status: string): string => {
   return formatOrderStatus(status);
 };
 
+// Các trạng thái Order CÒN hành động khả dụng (seller: confirm/ship/confirm-lost/cancel;
+// buyer: complete/report). Mọi trạng thái khác là terminal → ẩn toàn bộ nút thao tác,
+// chỉ hiển thị badge read-only. Guard này là "strict allow-list": an toàn kể cả khi
+// một sub-card quên tự return null.
+const ACTIONABLE_ORDER_STATUSES = new Set(['PENDING', 'CONFIRMED', 'SHIPPING', 'ISSUE_REPORTED']);
+const isOrderActionable = (status: string | null | undefined): boolean =>
+  !!status && ACTIONABLE_ORDER_STATUSES.has(status);
+
 // Thông tin Order do BE tạo ngay khi buyer ACCEPT báo giá (gửi qua WS event
 // `quoteAccepted`). Nếu có → card show payment selector inline thay vì
 // chỉ một badge tĩnh.
@@ -348,8 +356,11 @@ export const NegotiationQuoteCard = ({
                 <OrderTimeline currentStatus={liveOrderStatus} compact={true} />
               </div>
 
-              {/* Action Buttons - Direct rendering without wrapper title */}
-              {currentUser && liveOrderStatus !== 'COMPLETED' && (
+              {/* Action Buttons — STRICT GUARD: chỉ render khi đơn còn trạng thái
+                  có hành động (PENDING/CONFIRMED/SHIPPING/ISSUE_REPORTED). Khi đơn
+                  đã chốt (COMPLETED/CANCELLED/FAILED/REFUNDED/RETURNED/REFUND_PENDING)
+                  → ẩn hoàn toàn nút, tránh thao tác lên đơn đã kết thúc. */}
+              {currentUser && isOrderActionable(liveOrderStatus) && (
                 <>
                   {currentUser.is_seller && (
                     <SellerOrderActionsCard
@@ -366,7 +377,7 @@ export const NegotiationQuoteCard = ({
                 </>
               )}
 
-              {/* Completed Badge */}
+              {/* Completed Badge (read-only) */}
               {liveOrderStatus === 'COMPLETED' && (
                 <div className="text-center text-xs font-semibold text-green-700 bg-green-50 px-2 py-1.5 rounded-lg border border-green-200">
                   ✅ Đơn hàng đã hoàn thành
