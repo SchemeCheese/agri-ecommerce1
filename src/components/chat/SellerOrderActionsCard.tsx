@@ -180,24 +180,25 @@ export const SellerOrderActionsCard = ({ orderId, currentStatus }: SellerOrderAc
               <span>{error}</span>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
+          <DialogFooter className="gap-2">
+            <Button
               type="button"
               onClick={closeDialog}
               disabled={isLoading}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              variant="outline"
+              className="flex-1"
             >
               Huỷ
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => runSimpleAction('confirm', 'CONFIRMED')}
               disabled={isLoading}
-              className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              className="flex-1 bg-green-600 hover:bg-green-700"
             >
-              {isLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              {isLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle2 size={14} className="mr-1" />}
               Xác nhận đơn
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -215,24 +216,25 @@ export const SellerOrderActionsCard = ({ orderId, currentStatus }: SellerOrderAc
               <span>{error}</span>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
+          <DialogFooter className="gap-2">
+            <Button
               type="button"
               onClick={closeDialog}
               disabled={isLoading}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              variant="outline"
+              className="flex-1"
             >
               Huỷ
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => runSimpleAction('ship', 'SHIPPING')}
               disabled={isLoading}
-              className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
-              {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+              {isLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : <Package size={14} className="mr-1" />}
               Giao hàng
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -252,24 +254,26 @@ export const SellerOrderActionsCard = ({ orderId, currentStatus }: SellerOrderAc
               <span>{error}</span>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
+          <DialogFooter className="gap-2">
+            <Button
               type="button"
               onClick={closeDialog}
               disabled={isLoading}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              variant="outline"
+              className="flex-1"
             >
               Huỷ
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => runSimpleAction('confirm-lost', 'FAILED')}
               disabled={isLoading}
-              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              variant="destructive"
+              className="flex-1"
             >
-              {isLoading ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} />}
+              {isLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : <AlertCircle size={14} className="mr-1" />}
               Xác nhận
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -296,24 +300,26 @@ export const SellerOrderActionsCard = ({ orderId, currentStatus }: SellerOrderAc
               <span>{error}</span>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
+          <DialogFooter className="gap-2">
+            <Button
               type="button"
               onClick={closeDialog}
               disabled={isLoading}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              variant="outline"
+              className="flex-1"
             >
               Thoát
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleCancel}
               disabled={isLoading || !cancelReason.trim()}
-              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              variant="destructive"
+              className="flex-1"
             >
-              {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {isLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
               Xác nhận hủy
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

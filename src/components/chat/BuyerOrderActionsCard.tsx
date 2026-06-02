@@ -153,12 +153,12 @@ export const BuyerOrderActionsCard = ({ orderId, currentStatus }: BuyerOrderActi
               <span>{error}</span>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2">
             <button
               type="button"
               onClick={closeDialog}
               disabled={isLoading}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              className="flex-1 rounded-lg border border-gray-300 py-2 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60 transition"
             >
               Huỷ
             </button>
@@ -166,7 +166,7 @@ export const BuyerOrderActionsCard = ({ orderId, currentStatus }: BuyerOrderActi
               type="button"
               onClick={handleComplete}
               disabled={isLoading}
-              className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              className="flex-1 rounded-lg bg-green-600 py-2 px-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2 transition"
             >
               {isLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               Xác nhận
@@ -197,12 +197,12 @@ export const BuyerOrderActionsCard = ({ orderId, currentStatus }: BuyerOrderActi
               <span>{error}</span>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2">
             <button
               type="button"
               onClick={closeDialog}
               disabled={isLoading}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              className="flex-1 rounded-lg border border-gray-300 py-2 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60 transition"
             >
               Thoát
             </button>
@@ -210,7 +210,7 @@ export const BuyerOrderActionsCard = ({ orderId, currentStatus }: BuyerOrderActi
               type="button"
               onClick={handleReportIssue}
               disabled={isLoading || !reportNote.trim()}
-              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              className="flex-1 rounded-lg bg-red-600 py-2 px-3 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2 transition"
             >
               {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Flag size={14} />}
               Gửi báo cáo
