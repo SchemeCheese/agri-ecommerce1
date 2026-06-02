@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, AlertCircle, Loader2, Flag } from 'lucide-react';
 import api from '@/lib/axios';
-import { formatOrderStatus } from '@/utils/vi';
 import { io } from 'socket.io-client';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -109,49 +109,34 @@ export const BuyerOrderActionsCard = ({ orderId, currentStatus }: BuyerOrderActi
   const canReportIssue = liveStatus === 'SHIPPING';
   const hasActions = canComplete || canReportIssue;
 
+  if (!hasActions) return null;
+
   return (
-    <div className="bg-white border border-green-200 rounded-2xl p-4 shadow-sm w-full">
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
-        <CheckCircle2 size={16} className="text-green-600" />
-        <span className="text-sm font-bold text-gray-800">✓ Hành động mua hàng</span>
-      </div>
+    <div className="flex gap-2 flex-wrap">
+      {canComplete && (
+        <Button
+          onClick={() => { setError(null); setOpenDialog('complete'); }}
+          disabled={isLoading}
+          variant="default"
+          size="sm"
+          className="bg-green-600 hover:bg-green-700"
+        >
+          {isLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <CheckCircle2 size={16} className="mr-1" />}
+          {isLoading ? 'Đang xử lý...' : 'Đã nhận được hàng'}
+        </Button>
+      )}
 
-      {/* Current Status */}
-      <div className="mb-3 p-3 bg-green-50 rounded-xl border border-green-100">
-        <div className="text-xs font-bold text-green-600 uppercase tracking-wide mb-1">Trạng thái đơn hàng</div>
-        <div className="text-sm font-semibold text-green-900">{formatOrderStatus(liveStatus)}</div>
-      </div>
-
-      {/* Action Buttons (mở dialog Shadcn) */}
-      <div className="space-y-2">
-        {canComplete && (
-          <button
-            onClick={() => { setError(null); setOpenDialog('complete'); }}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold transition"
-          >
-            <CheckCircle2 size={16} />
-            Đã nhận được hàng
-          </button>
-        )}
-
-        {canReportIssue && (
-          <button
-            onClick={() => { setError(null); setReportNote(''); setOpenDialog('report-issue'); }}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold transition"
-          >
-            <Flag size={16} />
-            Chưa nhận được hàng / Báo cáo
-          </button>
-        )}
-
-        {!hasActions && (
-          <div className="bg-gray-50 text-gray-600 px-3 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-center">
-            ✓ Không có hành động khả dụng cho trạng thái này
-          </div>
-        )}
-      </div>
+      {canReportIssue && (
+        <Button
+          onClick={() => { setError(null); setReportNote(''); setOpenDialog('report-issue'); }}
+          disabled={isLoading}
+          variant="destructive"
+          size="sm"
+        >
+          {isLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <Flag size={16} className="mr-1" />}
+          {isLoading ? 'Đang xử lý...' : 'Báo cáo'}
+        </Button>
+      )}
 
       {/* ── Dialog: Xác nhận đã nhận hàng (Shadcn / Portal) ───────────────── */}
       <Dialog open={openDialog === 'complete'} onOpenChange={(open) => { if (!open) closeDialog(); }}>

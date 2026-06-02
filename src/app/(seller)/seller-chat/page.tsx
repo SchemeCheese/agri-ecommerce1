@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
 import { SellerQuoteForm, SellerProductOption } from '@/components/chat/SellerQuoteForm';
+import { ChatSkeleton } from '@/components/ui/ChatSkeleton';
 import {
   Message,
   Conversation,
@@ -462,7 +463,7 @@ export default function SellerChatPage() {
 
             {/* Messages */}
             <div className="flex-1 bg-gray-50 px-5 py-4 overflow-y-auto space-y-1">
-              {loadingMsgs && <div className="flex justify-center py-8"><Loader2 className="animate-spin text-green-600" size={24} /></div>}
+              {loadingMsgs && <ChatSkeleton />}
               {!loadingMsgs && messages.length === 0 && (
                 <div className="text-center py-10"><p className="text-xs text-gray-400">Chưa có tin nhắn</p></div>
               )}

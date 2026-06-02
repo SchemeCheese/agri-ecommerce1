@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Package, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import api from '@/lib/axios';
-import { formatOrderStatus } from '@/utils/vi';
 import { io } from 'socket.io-client';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -112,71 +112,60 @@ export const SellerOrderActionsCard = ({ orderId, currentStatus }: SellerOrderAc
   const canCancel = liveStatus === 'PENDING' || liveStatus === 'CONFIRMED';
   const hasActions = canConfirm || canShip || canConfirmLost || canCancel;
 
+  if (!hasActions) return null;
+
   return (
-    <div className="bg-white border border-blue-200 rounded-2xl p-4 shadow-sm w-full">
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
-        <Package size={16} className="text-blue-600" />
-        <span className="text-sm font-bold text-gray-800">📦 Quản lý đơn hàng</span>
-      </div>
+    <div className="flex gap-2 flex-wrap">
+      {canConfirm && (
+        <Button
+          onClick={() => { setError(null); setOpenDialog('confirm'); }}
+          disabled={isLoading}
+          variant="default"
+          size="sm"
+          className="bg-green-600 hover:bg-green-700"
+        >
+          {isLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <CheckCircle2 size={16} className="mr-1" />}
+          {isLoading ? 'Đang xử lý...' : 'Xác nhận đơn'}
+        </Button>
+      )}
 
-      {/* Current Status */}
-      <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
-        <div className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-1">Trạng thái hiện tại</div>
-        <div className="text-sm font-semibold text-blue-900">{formatOrderStatus(liveStatus)}</div>
-      </div>
+      {canShip && (
+        <Button
+          onClick={() => { setError(null); setOpenDialog('ship'); }}
+          disabled={isLoading}
+          variant="default"
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          {isLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <Package size={16} className="mr-1" />}
+          {isLoading ? 'Đang xử lý...' : 'Giao hàng'}
+        </Button>
+      )}
 
-      {/* Action Buttons (mở dialog Shadcn) */}
-      <div className="space-y-2">
-        {canConfirm && (
-          <button
-            onClick={() => { setError(null); setOpenDialog('confirm'); }}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold transition"
-          >
-            <CheckCircle2 size={16} />
-            Xác nhận đơn
-          </button>
-        )}
+      {canConfirmLost && (
+        <Button
+          onClick={() => { setError(null); setOpenDialog('confirm-lost'); }}
+          disabled={isLoading}
+          variant="destructive"
+          size="sm"
+        >
+          {isLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <AlertCircle size={16} className="mr-1" />}
+          {isLoading ? 'Đang xử lý...' : 'Xác nhận thất lạc'}
+        </Button>
+      )}
 
-        {canShip && (
-          <button
-            onClick={() => { setError(null); setOpenDialog('ship'); }}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold transition"
-          >
-            <Package size={16} />
-            Giao hàng
-          </button>
-        )}
-
-        {canConfirmLost && (
-          <button
-            onClick={() => { setError(null); setOpenDialog('confirm-lost'); }}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold transition"
-          >
-            <AlertCircle size={16} />
-            Xác nhận hàng thất lạc
-          </button>
-        )}
-
-        {canCancel && (
-          <button
-            onClick={() => { setError(null); setCancelReason(''); setOpenDialog('cancel'); }}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-bold transition"
-          >
-            <Trash2 size={16} />
-            Hủy đơn
-          </button>
-        )}
-
-        {!hasActions && (
-          <div className="bg-gray-50 text-gray-600 px-3 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-center">
-            ✓ Không có hành động khả dụng cho trạng thái này
-          </div>
-        )}
-      </div>
+      {canCancel && (
+        <Button
+          onClick={() => { setError(null); setCancelReason(''); setOpenDialog('cancel'); }}
+          disabled={isLoading}
+          variant="outline"
+          size="sm"
+          className="border-red-200 text-red-600 hover:bg-red-50"
+        >
+          {isLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <Trash2 size={16} className="mr-1" />}
+          {isLoading ? 'Đang xử lý...' : 'Hủy đơn'}
+        </Button>
+      )}
 
       {/* ── Dialog: Xác nhận đơn ──────────────────────────────────────────── */}
       <Dialog open={openDialog === 'confirm'} onOpenChange={(open) => { if (!open) closeDialog(); }}>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, XCircle, ClipboardList, Wallet, Banknote, Loader2, Info, ArrowRight, Package, MapPin, ReceiptText, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, Wallet, Banknote, Loader2, Info, ArrowRight, Package, MapPin, ReceiptText, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import { QuoteData } from '@/types/chat';
 import { formatCurrency } from '@/utils/vi';
@@ -257,181 +257,157 @@ export const NegotiationQuoteCard = ({
   };
 
   return (
-    <div className="bg-white border border-green-200 rounded-2xl p-4 shadow-sm w-full max-w-[320px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
-        <ClipboardList size={16} className="text-green-600" />
-        <span className="text-sm font-bold text-gray-800">📋 Báo giá từ người bán</span>
-      </div>
-
-      {/* Details */}
-      <div className="space-y-1.5 text-sm text-gray-700 mb-3">
-        <div className="flex justify-between">
-          <span className="text-gray-500">Sản phẩm:</span>
-          <span className="font-semibold">{quote.productName}</span>
+    <div className="bg-white border border-green-200 rounded-2xl p-3 shadow-sm w-full">
+      {/* Status Badge Header */}
+      {effectiveStatus === 'PENDING' && (
+        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Báo giá từ seller</span>
+          <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-[10px] font-bold">Chờ phản hồi</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Số lượng:</span>
+      )}
+
+      {effectiveStatus === 'ACCEPTED' && (
+        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Đơn hàng</span>
+          <span className="inline-block bg-green-100 text-green-700 px-2 py-1 rounded-lg text-[10px] font-bold">Đã chấp nhận</span>
+        </div>
+      )}
+
+      {effectiveStatus === 'REJECTED' && (
+        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Báo giá</span>
+          <span className="inline-block bg-red-100 text-red-700 px-2 py-1 rounded-lg text-[10px] font-bold">Đã từ chối</span>
+        </div>
+      )}
+
+      {effectiveStatus === 'EXPIRED' && (
+        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Báo giá</span>
+          <span className="inline-block bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-[10px] font-bold">Hết hạn</span>
+        </div>
+      )}
+
+      {/* Compact Body */}
+      <div className="space-y-1 text-xs text-gray-700 mb-2">
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-500 flex-shrink-0">Sản phẩm:</span>
+          <span className="font-semibold truncate max-w-[180px]">{quote.productName}</span>
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-500 flex-shrink-0">Số lượng:</span>
           <span className="font-semibold">{quote.quantity} {quote.unit}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Giá đề xuất:</span>
-          <span className="font-bold text-green-600">
-            {formatCurrency(quote.price)}/{quote.unit}
-          </span>
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-500 flex-shrink-0">Đơn giá:</span>
+          <span className="font-bold text-green-600">{formatCurrency(quote.price)}/{quote.unit}</span>
         </div>
-        <div className="flex justify-between border-t border-gray-100 pt-2 mt-1">
-          <span className="text-gray-500 font-medium">Tổng cộng:</span>
-          <span className="font-bold text-green-700 text-base">{formatCurrency(total)}</span>
+        <div className="flex justify-between gap-2 border-t border-gray-100 pt-1 mt-0.5">
+          <span className="text-gray-600 font-medium flex-shrink-0">Tổng:</span>
+          <span className="font-bold text-green-700">{formatCurrency(total)}</span>
         </div>
       </div>
 
-      {/* Actions / Status */}
+      {/* Actions / Status for PENDING */}
       {effectiveStatus === 'PENDING' && isBuyer && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 text-xs">
           <button
             onClick={handleOpenPaymentPopover}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl text-sm font-bold transition shadow-sm"
+            className="flex-1 flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold transition"
           >
-            <CheckCircle2 size={15} /> Chấp nhận &amp; Đặt hàng
+            <CheckCircle2 size={14} /> Chấp nhận
           </button>
           <button
             onClick={onReject}
-            className="flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-2.5 rounded-xl text-sm font-bold transition"
+            className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-2 rounded-lg font-bold transition"
           >
-            <XCircle size={15} /> Từ chối
+            <XCircle size={14} /> Từ chối
           </button>
         </div>
       )}
 
       {effectiveStatus === 'PENDING' && !isBuyer && (
-        <div className="bg-yellow-50 text-yellow-700 px-3 py-2 rounded-xl text-sm font-medium border border-yellow-100 text-center">
-          ⏳ Đang chờ người mua phản hồi...
+        <div className="text-center text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-1.5 rounded-lg border border-yellow-100">
+          ⏳ Chờ phản hồi từ người mua
         </div>
       )}
 
+      {/* ACCEPTED state: Order Tracking + Actions */}
       {effectiveStatus === 'ACCEPTED' && (
-        <div className="space-y-2.5">
-          {/* Live Order Tracker — when orderInfo exists */}
+        <div className="space-y-1.5">
           {orderInfo && liveOrderStatus && (
-            <div className="space-y-2.5">
-              {console.log('[NegotiationQuoteCard] Rendering Live Order Tracker. orderInfo.orderId:', orderInfo.orderId, 'liveOrderStatus:', liveOrderStatus)}
-              {/* Status Badge */}
-              <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2.5 rounded-xl text-xs font-bold border border-blue-200">
-                <Package size={15} />
-                <span>Đơn hàng: {formatOrderStatusLabel(liveOrderStatus)}</span>
-                <span className="ml-auto text-[10px] font-semibold text-blue-600/80 tracking-wide">
-                  #{orderInfo.orderId.slice(-6).toUpperCase()}
-                </span>
+            <>
+              {/* Status Badge with Order ID */}
+              <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-2 py-1.5 rounded-lg text-xs font-bold border border-blue-200">
+                <Package size={13} />
+                <span className="flex-1">{formatOrderStatusLabel(liveOrderStatus)}</span>
+                <span className="text-[9px] font-semibold text-blue-600/80">#{orderInfo.orderId.slice(-6).toUpperCase()}</span>
               </div>
 
-              {/* Mini Order Timeline (Compact) */}
-              <div className="bg-white border border-gray-100 rounded-xl p-2">
+              {/* Compact Timeline */}
+              <div className="bg-white border border-gray-100 rounded-lg p-1.5">
                 <OrderTimeline currentStatus={liveOrderStatus} compact={true} />
               </div>
 
-              {/* Action Buttons - Role Based */}
-              {currentUser && (
-                <div className="space-y-2">
-                  {/* Seller Actions Card */}
+              {/* Action Buttons - Direct rendering without wrapper title */}
+              {currentUser && liveOrderStatus !== 'COMPLETED' && (
+                <>
                   {currentUser.is_seller && (
                     <SellerOrderActionsCard
                       orderId={orderInfo.orderId}
                       currentStatus={liveOrderStatus}
                     />
                   )}
-
-                  {/* Buyer Actions Card */}
                   {currentUser.is_buyer && (
                     <BuyerOrderActionsCard
                       orderId={orderInfo.orderId}
                       currentStatus={liveOrderStatus}
                     />
                   )}
+                </>
+              )}
+
+              {/* Completed Badge */}
+              {liveOrderStatus === 'COMPLETED' && (
+                <div className="text-center text-xs font-semibold text-green-700 bg-green-50 px-2 py-1.5 rounded-lg border border-green-200">
+                  ✅ Đơn hàng đã hoàn thành
                 </div>
               )}
-            </div>
+
+              {/* Payment Status Messages */}
+              {isBuyer && orderInfo?.paymentStatus === 'PAID' && (
+                <div className="text-center text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded-lg border border-green-200">
+                  ✓ Đã thanh toán
+                </div>
+              )}
+              {isBuyer && orderInfo?.selectedMethod === 'COD' && orderInfo?.paymentStatus !== 'PAID' && (
+                <div className="text-center text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                  Đặt COD - chờ xác nhận
+                </div>
+              )}
+            </>
           )}
 
-          {/* Static accepted badge — fallback if no orderInfo yet (race condition) */}
           {!orderInfo && (
-            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-xl text-xs font-bold border border-green-200">
-              {console.log('[NegotiationQuoteCard] Rendering static ACCEPTED badge (no orderInfo yet)')}
-              <CheckCircle2 size={15} />
-              <span>Đã chấp nhận</span>
-            </div>
-          )}
-
-          {isBuyer && chosenPaymentMethod && !orderInfo && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-700 flex items-center gap-2">
-              <Info size={14} className="text-gray-400" />
-              {chosenPaymentMethod === 'COD' ? 'Đã đặt COD, seller sẽ xác nhận đơn trong chat.' : 'Đã xác nhận MoMo, đang chuyển hướng thanh toán.'}
-            </div>
-          )}
-
-          {/* Pay Now selector — chỉ hiện cho buyer + khi BE đã tạo Order + chưa chọn method */}
-          {isBuyer && orderInfo?.awaitsPaymentSelection && !orderInfo.selectedMethod && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
-              <div className="text-[11px] font-bold text-amber-800 mb-2 uppercase tracking-wide">
-                Chọn phương thức thanh toán
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => onSelectPayment?.('MOMO')}
-                  disabled={paymentLoading}
-                  className="flex items-center justify-center gap-1.5 bg-pink-600 hover:bg-pink-700 disabled:opacity-60 disabled:cursor-wait text-white py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
-                >
-                  {paymentLoading ? <Loader2 size={14} className="animate-spin" /> : <Wallet size={14} />}
-                  Trả qua MoMo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSelectPayment?.('COD')}
-                  disabled={paymentLoading}
-                  className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-wait text-white py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
-                >
-                  {paymentLoading ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} />}
-                  COD
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Trạng thái sau khi chọn method — ưu tiên paymentStatus từ WS update
-              (MoMo IPN flip CONFIRMED) > selectedMethod local optimistic. */}
-          {isBuyer && orderInfo?.paymentStatus === 'PAID' && (
-            <div className="bg-green-100 border border-green-300 rounded-xl px-3 py-2 text-xs font-bold text-green-800 flex items-center gap-2">
-              <CheckCircle2 size={14} /> Đã thanh toán &amp; xác nhận đơn hàng
-            </div>
-          )}
-          {isBuyer && orderInfo?.paymentStatus !== 'PAID' && orderInfo?.selectedMethod === 'COD' && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-700 flex items-center gap-2">
-              <Banknote size={14} /> Đã đặt COD — chờ seller xác nhận
-            </div>
-          )}
-          {isBuyer && orderInfo?.paymentStatus !== 'PAID' && orderInfo?.selectedMethod === 'MOMO' && (
-            <div className="bg-pink-50 border border-pink-200 rounded-xl px-3 py-2 text-xs font-semibold text-pink-700 flex items-center gap-2">
-              <Wallet size={14} /> Đang chuyển sang MoMo...
+            <div className="text-center text-xs font-semibold text-green-700 bg-green-50 px-2 py-1.5 rounded-lg border border-green-200">
+              ✓ Đã chấp nhận
             </div>
           )}
         </div>
       )}
 
       {effectiveStatus === 'REJECTED' && (
-        <div className="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-2 rounded-xl text-sm font-bold border border-red-100">
-          <XCircle size={15} /> Đã từ chối
+        <div className="text-center text-xs font-semibold text-red-700 bg-red-50 px-2 py-1.5 rounded-lg border border-red-200">
+          ✗ Đã từ chối
         </div>
       )}
 
       {effectiveStatus === 'EXPIRED' && (
-        <div className="bg-gray-50 text-gray-500 px-3 py-2 rounded-xl text-sm font-bold border border-gray-200 text-center">
-          ⌛ Đã hết hạn
+        <div className="text-center text-xs font-semibold text-gray-600 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200">
+          ⌛ Hết hạn
         </div>
       )}
 
-      {/* Checkout popover — Shadcn Dialog (Portal) để KHÔNG bị clip bởi
-          containing-block transform của chat widget (modal `fixed` cũ bị cắt). */}
+      {/* Checkout Dialog (unchanged) */}
       <Dialog
         open={showPaymentPopover && isBuyer && effectiveStatus === 'PENDING'}
         onOpenChange={(open) => { if (!open && !submittingCheckout) setShowPaymentPopover(false); }}

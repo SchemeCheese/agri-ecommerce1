@@ -29,6 +29,7 @@ import {
 } from '@/types/chat';
 import { NegotiationQuoteCard, QuoteOrderInfo } from '@/components/chat/NegotiationQuoteCard';
 import { PaymentResultModal } from '@/components/chat/PaymentResultModal';
+import { ChatSkeleton } from '@/components/ui/ChatSkeleton';
 
 // Payload BE emit qua WS event `orderStatusUpdated` — sau MoMo IPN hoặc các
 // trạng thái khác. messageId optional vì BE không phải lúc nào cũng biết quote
@@ -658,11 +659,7 @@ export default function BuyerChatWidgetPanel({
 
           {/* Messages */}
           <div className="flex-1 bg-gray-50 px-4 py-4 overflow-y-auto space-y-1">
-            {loadingMsgs && (
-              <div className="flex justify-center py-8">
-                <Loader2 className="animate-spin text-green-600" size={22} />
-              </div>
-            )}
+            {loadingMsgs && <ChatSkeleton />}
 
             {!loadingMsgs && messages.length === 0 && (
               <div className="text-center py-10">

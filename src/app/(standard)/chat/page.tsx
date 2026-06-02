@@ -24,6 +24,7 @@ const fixImg = (url: string) => {
 };
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
 import { PaymentResultModal } from '@/components/chat/PaymentResultModal';
+import { ChatSkeleton } from '@/components/ui/ChatSkeleton';
 import { Message, Conversation, QuoteData, extractQuote, extractNegotiationMsg } from '@/types/chat';
 
 interface QuoteAcceptedPayload {
@@ -827,11 +828,7 @@ function ChatPageInner() {
                       }
                     }}
                   >
-                    {loadingMsgs && (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="animate-spin text-green-600" size={24}/>
-                      </div>
-                    )}
+                    {loadingMsgs && <ChatSkeleton />}
                     {hasMoreMessages && !loadingMsgs && (
                       <div className="text-center py-2">
                         <button
