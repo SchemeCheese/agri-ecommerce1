@@ -13,51 +13,41 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, Wallet, Banknote, AlertCircle,
-import React, { useEffect, useMemo, useState } from 'react';
+  Package, MapPin, Receipt, CheckCircle2, CircleDot,
+  Truck, ShieldCheck, Clock3, BadgeCheck, TicketPercent,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { resolveImageUrl } from '@/lib/runtime-config';
 import {
-  ArrowLeft, Loader2, Wallet, Banknote, AlertCircle,
-  Package, MapPin, Receipt, CheckCircle2, CircleDot, Circle,
-  Truck, ShieldCheck, Clock3, BadgeCheck, CreditCard, TicketPercent,
-  ChevronRight,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
 
 type OrderItem = {
   id: string;
   quantity: number | string;
   negotiated_price: number | string;
-  product: { id: string; name: string; images?: string[] };
+  product: { id: string; name: string; unit?: string; reference_price?: number | string; images?: string[] };
 };
-type Payment = { id: string; payment_method: string; status: string; amount: number | string };
+type Payment = { id: string; payment_method: string; status: string; amount: number | string; type?: string; transaction_ref?: string | null; created_at?: string; updated_at?: string };
+type Voucher = { id: string; code: string; discount_type: 'PERCENT' | 'FIXED'; discount_value: number | string; max_discount_amount?: number | string | null; min_order_value?: number | string | null };
 type Order = {
   id: string;
   status: string;
-  product: { id: string; name: string; unit?: string; reference_price?: number | string; images?: string[] };
+  payment_method: string;
   final_total_price: number | string;
-type Payment = { id: string; payment_method: string; status: string; amount: number | string; type?: string; transaction_ref?: string | null; created_at?: string; updated_at?: string };
-type Voucher = { id: string; code: string; discount_type: 'PERCENT' | 'FIXED'; discount_value: number | string; max_discount_amount?: number | string | null; min_order_value?: number | string | null };
   created_at: string;
-  note?: string;
-  order_items: OrderItem[];
-  payments: Payment[];
-  seller?: { full_name?: string; profile?: { store_name?: string } };
-};
-
   updated_at?: string;
   shipped_at?: string | null;
   note?: string | null;
   tracking_code?: string | null;
+  shipping_address: string;
   discount_amount?: number | string | null;
   voucher?: Voucher | null;
   checkout_session?: { id: string; total_amount: number | string; status: string; momo_trans_id?: string | null; created_at: string; updated_at: string } | null;
-const formatVnd = (n: number | string) => `${Number(n).toLocaleString('vi-VN')} đ`;
   items: OrderItem[];
-export default function OrderDetailsPage() {
-  const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const orderId = params?.id;
-
+  payments: Payment[];
+  seller?: { full_name?: string; profile?: { store_name?: string } };
+};
 
 const STATUS_STEPS: Array<{ key: string; label: string; icon: React.ReactNode }> = [
   { key: 'PENDING', label: 'Chờ xác nhận', icon: <Clock3 size={14} /> },
@@ -65,6 +55,13 @@ const STATUS_STEPS: Array<{ key: string; label: string; icon: React.ReactNode }>
   { key: 'SHIPPING', label: 'Đang giao hàng', icon: <Truck size={14} /> },
   { key: 'COMPLETED', label: 'Đã hoàn thành', icon: <ShieldCheck size={14} /> },
 ];
+
+const formatVnd = (n: number | string) => `${Number(n).toLocaleString('vi-VN')} đ`;
+
+export default function OrderDetailsPage() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const orderId = params?.id;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

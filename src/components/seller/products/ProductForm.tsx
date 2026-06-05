@@ -123,7 +123,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
       setFormData(prev => ({
         ...prev,
         name:        prev.name.trim()        ? prev.name        : (data.name ?? prev.name),
-        description: prev.description.trim() ? prev.description : (data.description ?? prev.description),
+        description: prev.description?.trim() ? prev.description : (data.description ?? prev.description),
         unit:        data.suggested_unit ?? prev.unit,
         category_id: matchedCategory ? matchedCategory.id : prev.category_id,
       }));
