@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Bot, Send, Loader2, AlertCircle, History, Plus } from 'lucide-react';
+import { Bot, Send, Loader2, AlertCircle, History, Plus, ImagePlus, X } from 'lucide-react';
 import { SOCKET_BASE_URL } from '@/lib/runtime-config';
 import api from '@/lib/axios';
 
@@ -11,6 +11,7 @@ type AIMessage = {
   id: string;
   role: 'USER' | 'ASSISTANT';
   content: string;
+  image?: string; // data URI ảnh đính kèm (chỉ hiển thị local, BE không persist)
   pending?: boolean; // true khi đang stream từ server
   error?: boolean;
   created_at?: string;
@@ -32,6 +33,11 @@ interface Props {
 
 const AI_NS = `${SOCKET_BASE_URL.replace(/\/$/, '')}/ai-chat`;
 
+// Khớp SUPPORTED_IMAGE_MIME_TYPES của BE (SuggestProductDto / AskQuestionDto)
+const AI_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+// 5MB file ≈ 6.7M chars base64 — dưới MaxLength 14M của DTO và 16MB socket buffer
+const AI_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
 // ── Component ────────────────────────────────────────────────────────────────
 export const AIAssistantPanel: React.FC<Props> = ({
   mode = 'BUYER',
@@ -47,10 +53,13 @@ export const AIAssistantPanel: React.FC<Props> = ({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AISessionSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  // Ảnh đang chờ gửi kèm tin nhắn tiếp theo
+  const [pendingImage, setPendingImage] = useState<{ dataUri: string; mimeType: string } | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const token = useMemo(
     () => (typeof window !== 'undefined' ? localStorage.getItem('access_token') : null),
@@ -180,19 +189,46 @@ export const AIAssistantPanel: React.FC<Props> = ({
     setMessages([]);
     setSessionId(null);
     setError(null);
+    setPendingImage(null);
     streamingMsgIdRef.current = null;
     setShowHistory(false);
   }, []);
 
+  // ── Chọn ảnh đính kèm ──────────────────────────────────────────────────────
+  const handlePickImage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // cho phép chọn lại cùng 1 file
+    if (!file) return;
+    if (!AI_IMAGE_MIME_TYPES.includes(file.type)) {
+      setError('Định dạng ảnh không hỗ trợ — dùng JPEG, PNG, WebP hoặc HEIC.');
+      return;
+    }
+    if (file.size > AI_IMAGE_MAX_BYTES) {
+      setError('Ảnh quá lớn — tối đa 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setError(null);
+      setPendingImage({ dataUri: reader.result as string, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   // ── Gửi câu hỏi ────────────────────────────────────────────────────────────
   const handleSend = useCallback(() => {
-    const content = draft.trim();
-    if (!content || !socketRef.current?.connected || thinking) return;
+    const text = draft.trim();
+    const image = pendingImage;
+    if ((!text && !image) || !socketRef.current?.connected || thinking) return;
+
+    // Gửi ảnh không kèm chữ → nội dung mặc định để BE vẫn có text hợp lệ
+    const content = text || 'Hãy phân tích hình ảnh đính kèm này.';
 
     const userMsg: AIMessage = {
       id: `u-${Date.now()}`,
       role: 'USER',
       content,
+      image: image?.dataUri,
     };
     const placeholderId = `a-${Date.now()}`;
     streamingMsgIdRef.current = placeholderId;
@@ -203,6 +239,7 @@ export const AIAssistantPanel: React.FC<Props> = ({
       { id: placeholderId, role: 'ASSISTANT', content: '', pending: true },
     ]);
     setDraft('');
+    setPendingImage(null);
     setError(null);
 
     socketRef.current.emit('ai:ask', {
@@ -210,8 +247,10 @@ export const AIAssistantPanel: React.FC<Props> = ({
       sessionId: sessionId ?? undefined,
       mode,
       context,
+      // BE tự strip data-URI prefix khỏi imageBase64
+      ...(image ? { imageBase64: image.dataUri, imageMimeType: image.mimeType } : {}),
     });
-  }, [draft, thinking, sessionId, mode, context]);
+  }, [draft, pendingImage, thinking, sessionId, mode, context]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -300,6 +339,15 @@ export const AIAssistantPanel: React.FC<Props> = ({
                   : 'bg-white text-gray-800 border border-gray-200'
               }`}
             >
+              {m.image && (
+                // data URI — next/image không tối ưu được, dùng img thường
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={m.image}
+                  alt="Ảnh đính kèm"
+                  className="rounded-lg mb-1.5 max-h-40 w-auto"
+                />
+              )}
               {m.role === 'ASSISTANT' && m.pending && !m.content && (
                 <span className="inline-flex items-center gap-1 text-gray-500">
                   <Loader2 className="animate-spin" size={12} />
@@ -323,7 +371,46 @@ export const AIAssistantPanel: React.FC<Props> = ({
 
       {/* Composer */}
       <div className="p-3 border-t border-gray-100 bg-white">
+        {/* Preview ảnh chờ gửi */}
+        {pendingImage && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="relative shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={pendingImage.dataUri}
+                alt="Ảnh chờ gửi"
+                className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+              />
+              <button
+                type="button"
+                onClick={() => setPendingImage(null)}
+                className="absolute -top-1.5 -right-1.5 bg-gray-700 text-white rounded-full p-0.5 hover:bg-gray-900 transition-colors"
+                aria-label="Bỏ ảnh"
+              >
+                <X size={12} />
+              </button>
+            </div>
+            <span className="text-xs text-gray-400">Ảnh sẽ được gửi kèm tin nhắn</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 bg-gray-50 rounded-full border border-gray-200 p-1">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={connecting || thinking}
+            className="p-2 ml-1 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Đính kèm ảnh"
+            title="Đính kèm ảnh"
+          >
+            <ImagePlus size={18} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={AI_IMAGE_MIME_TYPES.join(',')}
+            className="hidden"
+            onChange={handlePickImage}
+          />
           <input
             type="text"
             placeholder={
@@ -341,7 +428,7 @@ export const AIAssistantPanel: React.FC<Props> = ({
           <button
             type="button"
             onClick={handleSend}
-            disabled={!draft.trim() || connecting || thinking}
+            disabled={(!draft.trim() && !pendingImage) || connecting || thinking}
             className="p-2 mr-1 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Gửi"
           >

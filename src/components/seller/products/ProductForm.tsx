@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Upload, X, Save, Loader2, ChevronRight, Handshake } from 'lucide-react';
+import { Upload, X, Save, Loader2, ChevronRight, Handshake, Sparkles } from 'lucide-react';
 import api from '@/lib/axios';
 import { SellerProduct, ProductFormData } from '@/hooks/useSellerProducts';
 
@@ -15,6 +15,23 @@ interface CategoryOption {
   id: number;
   name: string;
 }
+
+/** Response của POST /ai/suggest-product — mọi field nullable, BE luôn trả 200. */
+interface ProductSuggestion {
+  name: string | null;
+  category_name: string | null;
+  suggested_unit: string | null;
+  description: string | null;
+  confidence: number | null;
+}
+
+/** Mime types BE chấp nhận cho ảnh (SuggestProductDto). */
+const AI_SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
+/** So khớp tên danh mục không phân biệt hoa/thường và dấu tiếng Việt. */
+const COMBINING_DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g');
+const normalizeName = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(COMBINING_DIACRITICS, '').replace(/đ/g, 'd').trim();
 
 export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormData>({
@@ -64,16 +81,70 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // AI gợi ý từ ảnh đầu tiên (POST /ai/suggest-product)
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiFilled, setAiFilled]       = useState(false);
+
   const handleChange = <K extends keyof ProductFormData>(field: K, value: ProductFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  /**
+   * Gửi ảnh lên BE để Gemini vision gợi ý thông tin sản phẩm, rồi tự điền form.
+   * Fail ở bất kỳ bước nào → bỏ qua trong im lặng, user nhập tay như bình thường.
+   */
+  const suggestFromImage = async (file: File) => {
+    if (!AI_SUPPORTED_MIME_TYPES.includes(file.type)) return;
+    setAiAnalyzing(true);
+    try {
+      const imageBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result as string); // data URI — BE tự strip prefix
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+
+      const { data } = await api.post<ProductSuggestion>('/ai/suggest-product', {
+        imageBase64,
+        mimeType: file.type,
+      });
+
+      const matchedCategory = data.category_name
+        ? categories.find(c => {
+            const a = normalizeName(c.name);
+            const b = normalizeName(data.category_name!);
+            return a === b || a.includes(b) || b.includes(a);
+          })
+        : undefined;
+
+      const hasSuggestion = !!(data.name || data.description || data.suggested_unit || matchedCategory);
+      if (!hasSuggestion) return;
+
+      // Chỉ điền đè field còn trống — không ghi đè nội dung user đã gõ.
+      setFormData(prev => ({
+        ...prev,
+        name:        prev.name.trim()        ? prev.name        : (data.name ?? prev.name),
+        description: prev.description.trim() ? prev.description : (data.description ?? prev.description),
+        unit:        data.suggested_unit ?? prev.unit,
+        category_id: matchedCategory ? matchedCategory.id : prev.category_id,
+      }));
+      setAiFilled(true);
+    } catch {
+      // AI fail → form vẫn dùng được bình thường
+    } finally {
+      setAiAnalyzing(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    // Ảnh đầu tiên của sản phẩm → gọi AI phân tích để gợi ý thông tin
+    const isFirstImage = existingImages.length === 0 && newImageFiles.length === 0;
     setNewImageFiles(prev => [...prev, ...files]);
     setNewImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
     e.target.value = '';
+    if (isFirstImage) void suggestFromImage(files[0]);
   };
 
   const removeExistingImage = (idx: number) => {
@@ -124,6 +195,20 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
             <div className="w-1 h-6 bg-green-500 rounded-full" />
             Thông tin cơ bản
           </h3>
+
+          {aiFilled && (
+            <div className="flex items-start gap-2 bg-purple-50 border border-purple-100 text-purple-700 text-sm font-medium px-4 py-3 rounded-xl">
+              <Sparkles size={16} className="mt-0.5 flex-shrink-0" />
+              <span>Tự động điền dữ liệu bằng AI. Vui lòng kiểm tra lại!</span>
+              <button
+                onClick={() => setAiFilled(false)}
+                className="ml-auto text-purple-400 hover:text-purple-600 transition"
+                aria-label="Đóng"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -253,6 +338,13 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
             </label>
           </div>
+
+          {aiAnalyzing && (
+            <div className="flex items-center gap-2 text-sm text-purple-600 font-medium mt-3">
+              <Loader2 className="animate-spin" size={14} />
+              Đang phân tích hình ảnh...
+            </div>
+          )}
 
           {/* Nhập link ảnh thủ công */}
           <div className="mt-4">
