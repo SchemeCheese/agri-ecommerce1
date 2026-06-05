@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Upload, X, Save, Loader2, ChevronRight, Handshake, Sparkles } from 'lucide-react';
 import api from '@/lib/axios';
+import { compressImageForAI, mimeFromDataUri } from '@/lib/image-compressor';
 import { SellerProduct, ProductFormData } from '@/hooks/useSellerProducts';
 
 interface ProductFormProps {
@@ -97,16 +98,14 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
     if (!AI_SUPPORTED_MIME_TYPES.includes(file.type)) return;
     setAiAnalyzing(true);
     try {
-      const imageBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result as string); // data URI — BE tự strip prefix
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
+      // Nén về webp ≤0.3MB (web worker — UI không khựng) trước khi encode base64.
+      // Trả về data URI — BE tự strip prefix.
+      const imageBase64 = await compressImageForAI(file);
 
       const { data } = await api.post<ProductSuggestion>('/ai/suggest-product', {
         imageBase64,
-        mimeType: file.type,
+        // webp sau nén; nén fallback thì là mime gốc
+        mimeType: mimeFromDataUri(imageBase64, file.type),
       });
 
       const matchedCategory = data.category_name

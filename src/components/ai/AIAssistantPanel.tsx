@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { Bot, Send, Loader2, AlertCircle, History, Plus, ImagePlus, X } from 'lucide-react';
 import { SOCKET_BASE_URL } from '@/lib/runtime-config';
 import api from '@/lib/axios';
+import { compressImageForAI, mimeFromDataUri } from '@/lib/image-compressor';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type AIMessage = {
@@ -35,8 +36,9 @@ const AI_NS = `${SOCKET_BASE_URL.replace(/\/$/, '')}/ai-chat`;
 
 // Khớp SUPPORTED_IMAGE_MIME_TYPES của BE (SuggestProductDto / AskQuestionDto)
 const AI_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-// 5MB file ≈ 6.7M chars base64 — dưới MaxLength 14M của DTO và 16MB socket buffer
-const AI_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+// Giới hạn file ĐẦU VÀO — ảnh được nén về webp ≤0.3MB trước khi gửi nên chỉ
+// cần chặn file quá khổ (tránh decode ảnh khổng lồ ngay trên client)
+const AI_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
 // ── Component ────────────────────────────────────────────────────────────────
 export const AIAssistantPanel: React.FC<Props> = ({
@@ -55,6 +57,8 @@ export const AIAssistantPanel: React.FC<Props> = ({
   const [showHistory, setShowHistory] = useState(false);
   // Ảnh đang chờ gửi kèm tin nhắn tiếp theo
   const [pendingImage, setPendingImage] = useState<{ dataUri: string; mimeType: string } | null>(null);
+  // true khi đang nén/encode ảnh — disable nút đính kèm, hiện spinner
+  const [imageProcessing, setImageProcessing] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
@@ -195,7 +199,7 @@ export const AIAssistantPanel: React.FC<Props> = ({
   }, []);
 
   // ── Chọn ảnh đính kèm ──────────────────────────────────────────────────────
-  const handlePickImage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePickImage = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // cho phép chọn lại cùng 1 file
     if (!file) return;
@@ -204,15 +208,21 @@ export const AIAssistantPanel: React.FC<Props> = ({
       return;
     }
     if (file.size > AI_IMAGE_MAX_BYTES) {
-      setError('Ảnh quá lớn — tối đa 5MB.');
+      setError('Ảnh quá lớn — tối đa 10MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
+    setImageProcessing(true);
+    try {
+      // Nén về webp ≤0.3MB trong web worker — main thread không bị block
+      const dataUri = await compressImageForAI(file);
       setError(null);
-      setPendingImage({ dataUri: reader.result as string, mimeType: file.type });
-    };
-    reader.readAsDataURL(file);
+      // Bình thường là image/webp; nén fallback (vd HEIC) thì giữ mime gốc
+      setPendingImage({ dataUri, mimeType: mimeFromDataUri(dataUri, file.type) });
+    } catch {
+      setError('Không xử lý được ảnh. Vui lòng thử ảnh khác.');
+    } finally {
+      setImageProcessing(false);
+    }
   }, []);
 
   // ── Gửi câu hỏi ────────────────────────────────────────────────────────────
@@ -397,12 +407,12 @@ export const AIAssistantPanel: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={connecting || thinking}
+            disabled={connecting || thinking || imageProcessing}
             className="p-2 ml-1 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Đính kèm ảnh"
-            title="Đính kèm ảnh"
+            title={imageProcessing ? 'Đang nén ảnh...' : 'Đính kèm ảnh'}
           >
-            <ImagePlus size={18} />
+            {imageProcessing ? <Loader2 className="animate-spin" size={18} /> : <ImagePlus size={18} />}
           </button>
           <input
             ref={fileInputRef}
@@ -428,7 +438,7 @@ export const AIAssistantPanel: React.FC<Props> = ({
           <button
             type="button"
             onClick={handleSend}
-            disabled={(!draft.trim() && !pendingImage) || connecting || thinking}
+            disabled={(!draft.trim() && !pendingImage) || connecting || thinking || imageProcessing}
             className="p-2 mr-1 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Gửi"
           >
