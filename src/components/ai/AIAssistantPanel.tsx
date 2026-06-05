@@ -1,13 +1,36 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { io, Socket } from 'socket.io-client';
-import { Bot, Send, Loader2, AlertCircle, History, Plus, ImagePlus, X } from 'lucide-react';
-import { SOCKET_BASE_URL } from '@/lib/runtime-config';
+import { Bot, Send, Loader2, AlertCircle, History, Plus, ImagePlus, X, Store, ChevronRight, Package } from 'lucide-react';
+import { SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import api from '@/lib/axios';
 import { compressImageForAI, mimeFromDataUri } from '@/lib/image-compressor';
 
 // ── Types ────────────────────────────────────────────────────────────────────
+/** Card sản phẩm từ ai:actionable_data — link/ảnh build từ DB phía BE, không phải LLM. */
+type ActionableProduct = {
+  id: string;
+  name: string;
+  price: number;
+  unit?: string | null;
+  image_url?: string | null;
+};
+
+/** Card cửa hàng từ ai:actionable_data. */
+type ActionableShop = {
+  seller_id: string;
+  shop_name?: string | null;
+  avatar_url?: string | null;
+  avg_rating?: number | null;
+  verdict?: string | null;
+};
+
+type ActionableBlock =
+  | { type: 'products'; data: ActionableProduct[] }
+  | { type: 'shops'; data: ActionableShop[] };
+
 type AIMessage = {
   id: string;
   role: 'USER' | 'ASSISTANT';
@@ -16,6 +39,9 @@ type AIMessage = {
   pending?: boolean; // true khi đang stream từ server
   error?: boolean;
   created_at?: string;
+  // Entity cards do tool trả về — mỗi type giữ block mới nhất (tool có thể
+  // chạy nhiều round, round sau refine kết quả round trước)
+  actionableData?: ActionableBlock[];
 };
 
 type AISessionSummary = {
@@ -104,6 +130,21 @@ export const AIAssistantPanel: React.FC<Props> = ({
 
     socket.on('ai:tool_start', (payload: { sessionId: string; toolName: string; label: string }) => {
       setThinkingLabel(payload.label);
+    });
+
+    // Entity cards từ tool result — gắn vào assistant message đang stream.
+    // Cùng type thì replace (round tool sau refine round trước), khác type thì thêm.
+    socket.on('ai:actionable_data', (payload: { type: 'products' | 'shops'; data: any[] }) => {
+      if (!Array.isArray(payload?.data) || payload.data.length === 0) return;
+      setMessages((prev) => {
+        const id = streamingMsgIdRef.current;
+        if (!id) return prev;
+        return prev.map((m) => {
+          if (m.id !== id) return m;
+          const others = (m.actionableData ?? []).filter((b) => b.type !== payload.type);
+          return { ...m, actionableData: [...others, { type: payload.type, data: payload.data } as ActionableBlock] };
+        });
+      });
     });
 
     socket.on('ai:token', (payload: { chunk: string; sessionId: string }) => {
@@ -365,6 +406,18 @@ export const AIAssistantPanel: React.FC<Props> = ({
                 </span>
               )}
               {m.content}
+              {/* Entity cards từ tool result — link thật từ DB, chống LLM bịa link */}
+              {m.actionableData && m.actionableData.length > 0 && (
+                <div className="mt-2 space-y-2 whitespace-normal">
+                  {m.actionableData.map((block) => (
+                    <div key={block.type} className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                      {block.type === 'products'
+                        ? block.data.map((p) => <ProductMiniCard key={p.id} product={p} />)
+                        : block.data.map((s) => <ShopMiniCard key={s.seller_id} shop={s} />)}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -452,5 +505,68 @@ export const AIAssistantPanel: React.FC<Props> = ({
     </div>
   );
 };
+
+// ── Actionable cards ─────────────────────────────────────────────────────────
+const formatVnd = (n: number) => `${Number(n).toLocaleString('vi-VN')}đ`;
+
+/** Card sản phẩm mini trong bubble AI — bấm vào mở trang chi tiết. */
+const ProductMiniCard = ({ product }: { product: ActionableProduct }) => (
+  <Link
+    href={`/products/${product.id}`}
+    className="w-32 shrink-0 bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-green-400 hover:shadow-sm transition-all"
+  >
+    <div className="h-20 w-full bg-gray-50 flex items-center justify-center text-gray-300">
+      {product.image_url ? (
+        // URL từ BE (có thể là path tương đối /uploads/...) — img thường + resolveImageUrl
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={resolveImageUrl(product.image_url)}
+          alt={product.name}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <Package size={20} />
+      )}
+    </div>
+    <div className="p-2">
+      <p className="text-xs font-semibold text-gray-800 leading-snug line-clamp-2">{product.name}</p>
+      <p className="text-xs font-bold text-green-700 mt-1">
+        {formatVnd(product.price)}
+        {product.unit && <span className="font-normal text-gray-400">/{product.unit}</span>}
+      </p>
+      <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-green-600 mt-1">
+        Xem <ChevronRight size={11} />
+      </span>
+    </div>
+  </Link>
+);
+
+/** Card cửa hàng mini trong bubble AI — bấm vào mở trang shop. */
+const ShopMiniCard = ({ shop }: { shop: ActionableShop }) => (
+  <Link
+    href={`/shop/${shop.seller_id}`}
+    className="w-40 shrink-0 bg-white border border-gray-200 rounded-xl p-2.5 hover:border-green-400 hover:shadow-sm transition-all"
+  >
+    <div className="flex items-center gap-2">
+      <div className="h-9 w-9 rounded-full bg-green-50 border border-gray-100 overflow-hidden flex items-center justify-center text-green-600 shrink-0">
+        {shop.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={resolveImageUrl(shop.avatar_url)} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Store size={16} />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-gray-800 truncate">{shop.shop_name || 'Cửa hàng'}</p>
+        {typeof shop.avg_rating === 'number' && shop.avg_rating > 0 && (
+          <p className="text-[11px] text-amber-500">★ {shop.avg_rating}</p>
+        )}
+      </div>
+    </div>
+    <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-green-600 mt-1.5">
+      Đến cửa hàng <ChevronRight size={11} />
+    </span>
+  </Link>
+);
 
 export default AIAssistantPanel;
