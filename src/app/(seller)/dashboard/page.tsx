@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/axios';
-import { DollarSign, Package, ShoppingCart, TrendingUp, TrendingDown } from 'lucide-react';
+import { DollarSign, Package, ShoppingCart, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { StatCard }       from '@/components/seller/dashboard/StatCard';
 import { RevenueChart }   from '@/components/seller/dashboard/RevenueChart';
 import { TopProductsList } from '@/components/seller/dashboard/TopProductsList';
@@ -15,7 +15,12 @@ const MONTH_LABELS: Record<string, string> = {
 };
 
 interface DashboardStats {
+  /** Gross — tổng doanh thu đơn COMPLETED, chưa trừ hoàn tiền. */
   totalRevenue: number;
+  /** Tổng tiền đã hoàn cho buyer. */
+  refundedAmount: number;
+  /** Thực nhận = gross − refunded. */
+  netRevenue: number;
   totalOrders: number;
   activeProducts: number;
   revenueByMonth: { name: string; revenue: number }[];
@@ -61,8 +66,13 @@ export default function SellerDashboard() {
           revenue: Number(r.revenue || 0),
         }));
 
+        // BE mới trả grossRevenue/refundedAmount/netRevenue; BE cũ chỉ có
+        // totalRevenue → fallback net = gross, refunded = 0 (không vỡ UI).
+        const gross = Number(d.grossRevenue ?? d.totalRevenue ?? 0);
         setStats({
-          totalRevenue:   Number(d.totalRevenue    || 0),
+          totalRevenue:   gross,
+          refundedAmount: Number(d.refundedAmount || 0),
+          netRevenue:     Number(d.netRevenue ?? gross),
           totalOrders:    Number(d.totalOrders     || 0),
           activeProducts: Number(d.activeProducts  || 0),
           revenueByMonth,
@@ -87,12 +97,25 @@ export default function SellerDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <StatCard
-          title="Tổng Doanh Thu"
+          title="Tổng doanh thu (Gross)"
           value={loading ? '...' : `${(stats?.totalRevenue ?? 0).toLocaleString()}đ`}
+          subtitle="Đơn hoàn thành, chưa trừ hoàn tiền"
           icon={<DollarSign className="text-white" size={20} />}
           color="bg-green-500"
+          loading={loading}
+        />
+        <StatCard
+          title="Thực nhận (Net)"
+          value={loading ? '...' : `${(stats?.netRevenue ?? 0).toLocaleString()}đ`}
+          subtitle={
+            (stats?.refundedAmount ?? 0) > 0
+              ? `Đã hoàn tiền: ${(stats?.refundedAmount ?? 0).toLocaleString()}đ`
+              : 'Chưa phát sinh hoàn tiền'
+          }
+          icon={<Wallet className="text-white" size={20} />}
+          color="bg-emerald-600"
           loading={loading}
         />
         <StatCard

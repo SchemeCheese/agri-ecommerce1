@@ -40,6 +40,10 @@ const formatOrderStatusLabel = (status: string): string => {
   return formatOrderStatus(status);
 };
 
+// Báo giá có hiệu lực 24h kể từ lúc seller gửi — khớp QUOTE_EXPIRY_MS phía BE
+// (negotiation.service / checkout-quote). FE chỉ disable UI; BE là nguồn chặn thật.
+const QUOTE_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
 // Các trạng thái Order CÒN hành động khả dụng (seller: confirm/ship/confirm-lost/cancel;
 // buyer: complete/report). Mọi trạng thái khác là terminal → ẩn toàn bộ nút thao tác,
 // chỉ hiển thị badge read-only. Guard này là "strict allow-list": an toàn kể cả khi
@@ -189,12 +193,19 @@ export const NegotiationQuoteCard = ({
 
   // Action handlers for order status updates
   const effectiveStatus = localQuoteStatus ?? quote.status;
+  // Hết hạn chỉ có ý nghĩa khi quote còn PENDING — quote đã ACCEPTED/REJECTED
+  // giữ nguyên trạng thái cũ. Thiếu createdAt (message rất cũ) → coi như còn hạn,
+  // BE vẫn chặn nếu thật sự quá 24h.
+  const isExpired =
+    effectiveStatus === 'PENDING' &&
+    !!quote.createdAt &&
+    Date.now() - new Date(quote.createdAt).getTime() > QUOTE_EXPIRY_MS;
   const total = quote.price * quote.quantity;
   const canContinueToPayment = shippingPhone.trim() && shippingAddress.trim();
   const canConfirmCheckout = !submittingCheckout && shippingPhone.trim() && shippingAddress.trim();
 
   const handleOpenPaymentPopover = () => {
-    if (effectiveStatus !== 'PENDING' || !isBuyer) return;
+    if (effectiveStatus !== 'PENDING' || !isBuyer || isExpired) return;
     setSubmitError(null);
     setShowPaymentPopover(true);
     setCheckoutStep('PRESHOW');
@@ -270,7 +281,11 @@ export const NegotiationQuoteCard = ({
       {effectiveStatus === 'PENDING' && (
         <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
           <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Báo giá từ seller</span>
-          <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-[10px] font-bold">Chờ phản hồi</span>
+          {isExpired ? (
+            <span className="inline-block bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-[10px] font-bold">Hết hạn</span>
+          ) : (
+            <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-[10px] font-bold">Chờ phản hồi</span>
+          )}
         </div>
       )}
 
@@ -317,26 +332,44 @@ export const NegotiationQuoteCard = ({
 
       {/* Actions / Status for PENDING */}
       {effectiveStatus === 'PENDING' && isBuyer && (
-        <div className="flex gap-2 text-xs">
-          <button
-            onClick={handleOpenPaymentPopover}
-            className="flex-1 flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold transition"
-          >
-            <CheckCircle2 size={14} /> Chấp nhận
-          </button>
-          <button
-            onClick={onReject}
-            className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-2 rounded-lg font-bold transition"
-          >
-            <XCircle size={14} /> Từ chối
-          </button>
+        <div className="space-y-1.5">
+          {isExpired && (
+            <div className="text-center text-xs font-semibold text-gray-600 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200">
+              ⌛ Báo giá đã hết hạn (quá 24 giờ). Hãy nhắn seller gửi báo giá mới.
+            </div>
+          )}
+          <div className="flex gap-2 text-xs">
+            <button
+              onClick={handleOpenPaymentPopover}
+              disabled={isExpired}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg font-bold transition ${
+                isExpired
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+            >
+              <CheckCircle2 size={14} /> Chấp nhận
+            </button>
+            <button
+              onClick={onReject}
+              className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-2 rounded-lg font-bold transition"
+            >
+              <XCircle size={14} /> Từ chối
+            </button>
+          </div>
         </div>
       )}
 
       {effectiveStatus === 'PENDING' && !isBuyer && (
-        <div className="text-center text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-1.5 rounded-lg border border-yellow-100">
-          ⏳ Chờ phản hồi từ người mua
-        </div>
+        isExpired ? (
+          <div className="text-center text-xs font-medium text-gray-600 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200">
+            ⌛ Báo giá đã hết hạn — người mua không thể chấp nhận nữa
+          </div>
+        ) : (
+          <div className="text-center text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-1.5 rounded-lg border border-yellow-100">
+            ⏳ Chờ phản hồi từ người mua
+          </div>
+        )
       )}
 
       {/* ACCEPTED state: Order Tracking + Actions */}

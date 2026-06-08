@@ -3,10 +3,11 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { io, Socket } from 'socket.io-client';
-import { Bot, Send, Loader2, AlertCircle, History, Plus, ImagePlus, X, Store, ChevronRight, Package } from 'lucide-react';
+import { Bot, Send, Loader2, AlertCircle, History, Plus, ImagePlus, X, Store, ChevronRight, Package, Eraser } from 'lucide-react';
 import { SOCKET_BASE_URL, resolveImageUrl } from '@/lib/runtime-config';
 import api from '@/lib/axios';
 import { compressImageForAI, mimeFromDataUri } from '@/lib/image-compressor';
+import { useToast } from '@/components/ui/Toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 /** Card sản phẩm từ ai:actionable_data — link/ảnh build từ DB phía BE, không phải LLM. */
@@ -85,6 +86,7 @@ export const AIAssistantPanel: React.FC<Props> = ({
   const [pendingImage, setPendingImage] = useState<{ dataUri: string; mimeType: string } | null>(null);
   // true khi đang nén/encode ảnh — disable nút đính kèm, hiện spinner
   const [imageProcessing, setImageProcessing] = useState(false);
+  const { show: showToast, ToastNode } = useToast();
 
   const socketRef = useRef<Socket | null>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
@@ -135,6 +137,8 @@ export const AIAssistantPanel: React.FC<Props> = ({
     // Entity cards từ tool result — gắn vào assistant message đang stream.
     // Cùng type thì replace (round tool sau refine round trước), khác type thì thêm.
     socket.on('ai:actionable_data', (payload: { type: 'products' | 'shops'; data: any[] }) => {
+      // Chỉ render type đã có card component — type lạ (vd 'orders' tương lai) bỏ qua
+      if (payload?.type !== 'products' && payload?.type !== 'shops') return;
       if (!Array.isArray(payload?.data) || payload.data.length === 0) return;
       setMessages((prev) => {
         const id = streamingMsgIdRef.current;
@@ -148,7 +152,10 @@ export const AIAssistantPanel: React.FC<Props> = ({
     });
 
     socket.on('ai:token', (payload: { chunk: string; sessionId: string }) => {
-      if (thinkingLabel) setThinkingLabel(null);
+      // Không đọc thinkingLabel từ closure — effect chỉ chạy 1 lần ([token])
+      // nên giá trị đó stale vĩnh viễn là null. setState(null) khi đã null
+      // được React bail-out, không gây render thừa.
+      setThinkingLabel(null);
       setSessionId((cur) => cur ?? payload.sessionId);
       setMessages((prev) => {
         const id = streamingMsgIdRef.current;
@@ -239,6 +246,12 @@ export const AIAssistantPanel: React.FC<Props> = ({
     setShowHistory(false);
   }, []);
 
+  // ── Làm mới ngữ cảnh — xoá hội thoại cũ để AI không bị "ám" context cũ ─────
+  const clearContext = useCallback(() => {
+    newSession();
+    showToast('Đã làm mới ngữ cảnh trò chuyện');
+  }, [newSession, showToast]);
+
   // ── Chọn ảnh đính kèm ──────────────────────────────────────────────────────
   const handlePickImage = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -306,6 +319,7 @@ export const AIAssistantPanel: React.FC<Props> = ({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className={`flex flex-col h-full bg-white ${className}`}>
+      {ToastNode}
       {/* Header tools */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
         <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -313,6 +327,16 @@ export const AIAssistantPanel: React.FC<Props> = ({
           <span>AgriBot · {mode === 'BUYER' ? 'Người mua' : 'Người bán'}</span>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={clearContext}
+            disabled={messages.length === 0 && !pendingImage}
+            className="p-1.5 hover:bg-gray-200 rounded text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Làm mới hội thoại"
+            aria-label="Làm mới hội thoại"
+          >
+            <Eraser size={16} />
+          </button>
           <button
             type="button"
             onClick={newSession}
@@ -535,7 +559,7 @@ const ProductMiniCard = ({ product }: { product: ActionableProduct }) => (
         {product.unit && <span className="font-normal text-gray-400">/{product.unit}</span>}
       </p>
       <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-green-600 mt-1">
-        Xem <ChevronRight size={11} />
+        Xem chi tiết <ChevronRight size={11} />
       </span>
     </div>
   </Link>

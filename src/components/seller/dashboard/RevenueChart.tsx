@@ -19,7 +19,13 @@ const formatVND = (v: number | string | readonly (number | string)[] | null | un
 
 export const RevenueChart = ({ data }: RevenueChartProps) => (
   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-    <h3 className="font-bold text-gray-800 mb-6">Biểu đồ doanh thu theo tháng</h3>
+    {/* Chart vẽ theo SUM(final_total_price) đơn COMPLETED của từng tháng —
+        tức là GROSS. Net (đã trừ hoàn tiền) chỉ có ở StatCard tổng; ghi rõ
+        trên title để seller không nhầm hai con số. */}
+    <div className="flex items-baseline justify-between mb-6">
+      <h3 className="font-bold text-gray-800">Biểu đồ doanh thu theo tháng</h3>
+      <span className="text-xs text-gray-400">Gross — chưa trừ hoàn tiền</span>
+    </div>
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data}>
@@ -33,7 +39,7 @@ export const RevenueChart = ({ data }: RevenueChartProps) => (
           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
           <YAxis axisLine={false} tickLine={false} tickFormatter={formatM} tick={{ fontSize: 12 }} />
           <Tooltip
-            formatter={(value) => [formatVND(value), 'Doanh thu']}
+            formatter={(value) => [formatVND(value), 'Doanh thu (gross)']}
             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
           />
           <Area type="monotone" dataKey="revenue" stroke="#16a34a" fillOpacity={1} fill="url(#colorRev)" strokeWidth={2} />

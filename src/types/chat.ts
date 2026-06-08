@@ -22,6 +22,8 @@ export interface QuoteData {
   price:       number;
   unit:        string;
   status:      QuoteStatus;
+  /** Thời điểm seller gửi báo giá — FE tính hết hạn 24h từ mốc này. */
+  createdAt?:  string;
 }
 
 /**
@@ -59,7 +61,12 @@ export function extractQuote(msg: Message): QuoteData | null {
   if (msg.quote) {
     // Một số phiên bản BE emit nested quote KHÔNG kèm messageId — fallback về msg.id
     // để respondToQuote luôn nhận được id hợp lệ (tránh Prisma crash undefined).
-    return { ...msg.quote, messageId: msg.quote.messageId ?? msg.id };
+    // createdAt tương tự: nested quote cũ không có field này → dùng msg.created_at.
+    return {
+      ...msg.quote,
+      messageId: msg.quote.messageId ?? msg.id,
+      createdAt: msg.quote.createdAt ?? msg.created_at,
+    };
   }
   if (msg.message_type === 'NEGOTIATION_QUOTE' && msg.quote_product_id) {
     return {
@@ -70,6 +77,7 @@ export function extractQuote(msg: Message): QuoteData | null {
       price:       msg.quote_price       ?? 0,
       unit:        msg.quote_unit        ?? 'kg',
       status:      msg.quote_status      ?? 'PENDING',
+      createdAt:   msg.created_at,
     };
   }
   return null;
