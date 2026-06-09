@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, ShoppingCart, Menu, LogOut, ChevronDown } from 'lucide-react';
+import { User, ShoppingCart, Menu, LogOut, ChevronDown, Repeat } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -16,8 +17,10 @@ interface HeaderProps {
 }
 
 export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [switching, setSwitching] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const { t, currentLanguage, changeLanguage } = useTranslation();
@@ -40,8 +43,25 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // User.is_seller là source of truth — schema dùng boolean flags, không có field `role`
-  const isSeller = !!user?.is_seller;
+  // Workspace HIỆN TẠI dựa vào activeRole (BE ký vào JWT). Quyền sở hữu (ownsSeller/
+  // ownsBuyer) chỉ dùng để quyết định có hiện nút "Đổi vai trò" / "Kênh người bán".
+  const ownsSeller = !!user?.is_seller;
+  const ownsBuyer = !!user?.is_buyer;
+  const isSeller = user?.activeRole ? user.activeRole === 'SELLER' : ownsSeller;
+  const canSwitch = ownsBuyer && ownsSeller;
+
+  const handleSwitch = async (to: 'BUYER' | 'SELLER') => {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      const u = await switchRole(to);
+      closeMobileMenu();
+      // Điều hướng tới workspace mới; replace để không quay lại trang cũ sai quyền.
+      if (u) router.push(to === 'SELLER' ? '/dashboard' : '/');
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   return (
     <header className={cn(
@@ -105,15 +125,21 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
                   <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg">
                     Hồ sơ của tôi
                   </Link>
-                  {isSeller ? (
+                  {isSeller && (
                     <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg font-semibold">
                       🏪 Quản lý cửa hàng
                     </Link>
-                  ) : (
+                  )}
+                  {canSwitch ? (
+                    <button onClick={() => handleSwitch(isSeller ? 'BUYER' : 'SELLER')} disabled={switching}
+                      className="w-full text-left px-4 py-2 text-sm text-green-700 hover:bg-green-50 rounded-lg font-semibold flex items-center gap-2 disabled:opacity-60">
+                      <Repeat size={14} /> {isSeller ? 'Chuyển sang Mua hàng' : 'Chuyển sang Bán hàng'}
+                    </button>
+                  ) : (!ownsSeller && (
                     <Link href="/become-seller" className="block px-4 py-2 text-sm text-green-700 hover:bg-green-50 rounded-lg font-semibold">
                       ✨ Kênh người bán
                     </Link>
-                  )}
+                  ))}
                   <button onClick={logout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2">
                     <LogOut size={14} /> Đăng xuất
                   </button>
@@ -181,6 +207,12 @@ export const Header = ({ isScrolled, logoSrc }: HeaderProps) => {
                   </span>
                 </div>
               </Link>
+              {canSwitch && (
+                <button onClick={() => handleSwitch(isSeller ? 'BUYER' : 'SELLER')} disabled={switching}
+                  className="mt-2 w-full text-left px-3 py-2 text-green-700 hover:bg-green-50 rounded-md font-medium text-sm flex items-center gap-2 disabled:opacity-60">
+                  <Repeat size={16} /> {isSeller ? 'Chuyển sang Mua hàng' : 'Chuyển sang Bán hàng'}
+                </button>
+              )}
               <button onClick={() => { logout(); closeMobileMenu(); }} className="mt-2 w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 rounded-md font-medium text-sm flex items-center gap-2">
                 <LogOut size={16} /> Đăng xuất
               </button>

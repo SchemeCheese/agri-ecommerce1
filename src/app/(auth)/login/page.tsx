@@ -12,40 +12,40 @@ import { Mail, Lock, ArrowRight, User, Store } from 'lucide-react';
 function LoginContent() {
   const router = useRouter();
 
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, selectRole } = useAuth();
   const { show: showToast, ToastNode } = useToast();
 
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [selectedRole, setSelectedRole] = useState<'BUYER' | 'SELLER'>('BUYER');
   const [loading, setLoading] = useState(false);
+  // Khi BE yêu cầu chọn workspace (sở hữu cả BUYER + SELLER) → mở modal.
+  const [roleChoice, setRoleChoice] = useState<{ tempToken: string; allowedRoles: ('BUYER' | 'SELLER' | 'ADMIN')[] } | null>(null);
 
-  // Điều hướng theo role: SELLER → /dashboard, BUYER (hoặc cả 2) → /
-  // Nếu user có cả 2, dùng selectedRole (vai trò user vừa chọn tab) làm "active mode".
-  const resolveLandingPath = (u: { is_buyer: boolean; is_seller: boolean }) => {
-    if (selectedRole === 'SELLER' && u.is_seller) return '/dashboard';
-    if (selectedRole === 'BUYER' && u.is_buyer) return '/';
-    // Fallback theo cờ thật
-    if (u.is_seller && !u.is_buyer) return '/dashboard';
-    return '/';
+  // Điều hướng theo activeRole đã được BE cấp: SELLER → /dashboard, còn lại → /.
+  const landingPathFor = (role?: string) => (role === 'SELLER' ? '/dashboard' : '/');
+
+  const finishWithUser = (u: { activeRole?: string }) => {
+    showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
+    setTimeout(() => router.push(landingPathFor(u.activeRole)), 1000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    const loggedUser = await login(formData.email, formData.password);
-
-    if (loggedUser) {
-      // Nếu user chọn login as SELLER nhưng tài khoản chưa có quyền → cảnh báo
-      if (selectedRole === 'SELLER' && !loggedUser.is_seller) {
-        showToast('Tài khoản này chưa có quyền bán hàng. Đăng ký bán hàng trong trang Hồ sơ.', 'error');
-        setTimeout(() => router.push('/'), 1500);
-      } else {
-        showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
-        setTimeout(() => router.push(resolveLandingPath(loggedUser)), 1200);
+    try {
+      const outcome = await login(formData.email, formData.password);
+      if (outcome.requiresRoleSelection) {
+        setRoleChoice({ tempToken: outcome.tempToken, allowedRoles: outcome.allowedRoles });
+        setLoading(false);
+        return;
       }
-    } else {
-      showToast('Email hoặc mật khẩu không chính xác!', 'error');
+      finishWithUser(outcome.user);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const msg = status === 403
+        ? 'Tài khoản chưa xác thực OTP. Vui lòng kiểm tra email để kích hoạt.'
+        : (error?.response?.data?.message || 'Email hoặc mật khẩu không chính xác!');
+      showToast(Array.isArray(msg) ? msg[0] : msg, 'error');
       setLoading(false);
     }
   };
@@ -53,20 +53,16 @@ function LoginContent() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const result = await loginWithGoogle(selectedRole);
-      console.log('[LOGIN] loginWithGoogle resolved', result);
-      showToast(result.message || 'Đăng nhập Google thành công!', 'success');
-      const u = result.user;
-      const path = u ? resolveLandingPath(u) : '/';
-      console.log(`[LOGIN] scheduling redirect to ${path} in 1200ms`);
-      setTimeout(() => {
-        console.log(`[LOGIN] router.push(${path}) firing now`);
-        router.push(path);
-      }, 1200);
+      const outcome = await loginWithGoogle(selectedRole);
+      if (outcome.requiresRoleSelection) {
+        setRoleChoice({ tempToken: outcome.tempToken, allowedRoles: outcome.allowedRoles });
+        setLoading(false);
+        return;
+      }
+      showToast(outcome.message || 'Đăng nhập Google thành công!', 'success');
+      setTimeout(() => router.push(landingPathFor(outcome.user.activeRole)), 1000);
     } catch (error: any) {
-      // User-initiated popup dismissal — not a real error. Firebase throws this
-      // when the user closes the OAuth window or fires a second popup request
-      // before the first resolves. Stay silent in both cases.
+      // User-initiated popup dismissal — not a real error.
       const code = error?.code ?? error?.cause?.code;
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
         setLoading(false);
@@ -74,6 +70,21 @@ function LoginContent() {
       }
       console.error('[LOGIN] handleGoogleLogin caught', error?.response?.status, error?.response?.data ?? error?.message);
       showToast(error.response?.data?.message || error.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.', 'error');
+      setLoading(false);
+    }
+  };
+
+  // Người dùng chọn workspace trong modal → đổi tempToken lấy token đầy đủ.
+  const handleSelectRole = async (role: 'BUYER' | 'SELLER' | 'ADMIN') => {
+    if (!roleChoice) return;
+    setLoading(true);
+    try {
+      const u = await selectRole(roleChoice.tempToken, role);
+      setRoleChoice(null);
+      if (u) finishWithUser(u);
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Không thể chọn vai trò. Vui lòng đăng nhập lại.', 'error');
+      setRoleChoice(null);
       setLoading(false);
     }
   };
@@ -93,6 +104,34 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex bg-white font-sans">
       {ToastNode}
+
+      {/* --- MODAL CHỌN WORKSPACE (khi tài khoản sở hữu cả BUYER + SELLER) --- */}
+      {roleChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 text-center">Chọn không gian làm việc</h3>
+            <p className="mt-1 text-sm text-gray-500 text-center">Tài khoản của bạn có nhiều vai trò. Hãy chọn để tiếp tục.</p>
+            <div className="mt-6 space-y-3">
+              {roleChoice.allowedRoles.includes('BUYER') && (
+                <button type="button" onClick={() => handleSelectRole('BUYER')} disabled={loading}
+                  className="w-full flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50 transition disabled:opacity-60">
+                  <User size={20} className="text-green-600" />
+                  <span className="font-semibold text-gray-800">Người mua</span>
+                </button>
+              )}
+              {roleChoice.allowedRoles.includes('SELLER') && (
+                <button type="button" onClick={() => handleSelectRole('SELLER')} disabled={loading}
+                  className="w-full flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50 transition disabled:opacity-60">
+                  <Store size={20} className="text-green-600" />
+                  <span className="font-semibold text-gray-800">Người bán (Quản lý cửa hàng)</span>
+                </button>
+              )}
+            </div>
+            <button type="button" onClick={() => { setRoleChoice(null); setLoading(false); }}
+              className="mt-5 w-full text-sm text-gray-500 hover:text-gray-700">Hủy</button>
+          </div>
+        </div>
+      )}
 
       {/* --- CỘT TRÁI: ẢNH --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">

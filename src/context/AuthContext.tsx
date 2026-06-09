@@ -7,6 +7,8 @@ import { useCartStore } from '@/store/useCartStore';
 import api from '@/lib/axios';
 import { firebaseAuth } from '@/lib/firebase';
 
+type AppRole = 'BUYER' | 'SELLER' | 'ADMIN';
+
 interface User {
   id: string;
   email: string;
@@ -15,15 +17,28 @@ interface User {
   is_seller: boolean;
   is_admin: boolean;
   avatar?: string;
+  // Workspace đang dùng (BE ký vào JWT). UI buyer/seller dựa vào activeRole.
+  activeRole?: AppRole;
+  // Các vai trò user sở hữu — quyết định có hiện nút "Đổi vai trò" hay không.
+  allowedRoles?: AppRole[];
 }
 
 type GoogleAuthRole = 'BUYER' | 'SELLER';
 
+// Kết quả của login/sync: hoặc đã có phiên đầy đủ, hoặc cần chọn workspace.
+type RoleSelection = { requiresRoleSelection: true; tempToken: string; allowedRoles: AppRole[]; message?: string };
+type SessionOutcome = { requiresRoleSelection: false; user: User; message?: string };
+type AuthOutcome = RoleSelection | SessionOutcome;
+
 interface AuthContextType {
   user: User | null;
-  login: (email: string, pass: string) => Promise<User | null>;
-  loginWithGoogle: (role: GoogleAuthRole) => Promise<{ message: string; user?: User }>;
+  login: (email: string, pass: string) => Promise<AuthOutcome>;
+  loginWithGoogle: (role: GoogleAuthRole) => Promise<AuthOutcome>;
   registerWithGoogle: (role: GoogleAuthRole) => Promise<{ message: string; user?: User }>;
+  // Hoàn tất login khi cần chọn vai trò (dùng tempToken).
+  selectRole: (tempToken: string, role: AppRole) => Promise<User | null>;
+  // Đổi workspace khi đang đăng nhập.
+  switchRole: (role: AppRole) => Promise<User | null>;
   becomeSeller: () => Promise<User | null>;
   logout: () => void;
   isLoading: boolean;
@@ -42,15 +57,17 @@ async function getGoogleIdToken() {
 // Idempotent server-side upsert from a Firebase ID token.
 // Tries the canonical /auth/sync first; falls back to the older alias /auth/firebase
 // so Google sign-in keeps working until the new BE is deployed.
-async function syncFirebaseUser(idToken: string, role?: GoogleAuthRole) {
+// Trả về raw data — có thể là phiên đầy đủ ({access_token,user}) HOẶC
+// yêu cầu chọn vai trò ({requiresRoleSelection,tempToken,allowedRoles}).
+async function syncFirebaseUser(idToken: string, role?: GoogleAuthRole): Promise<any> {
   const body = { idToken, ...(role ? { role } : {}) };
   try {
     const { data } = await api.post('/auth/sync', body);
-    return data as { message: string; access_token: string; user: User };
+    return data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
       const { data } = await api.post('/auth/firebase', body);
-      return data as { message: string; access_token: string; user: User };
+      return data;
     }
     throw err;
   }
@@ -124,6 +141,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const idToken = await fbUser.getIdToken();
         const synced = await syncFirebaseUser(idToken);
+        // Tài khoản nhiều vai trò: background sync không thể tự chọn workspace →
+        // để nguyên trạng thái guest, user sẽ chọn vai trò khi vào trang /login.
+        if (synced?.requiresRoleSelection) {
+          setIsLoading(false);
+          return;
+        }
         persistSession(synced.user, synced.access_token);
         setUser(synced.user);
       } catch (err) {
@@ -139,39 +162,66 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // ─── Email / password (native BE auth) ──────────────────────────────────
   // BE /auth/login also updates last_login_at server-side on every success.
-  const login = async (email: string, pass: string): Promise<User | null> => {
+  const login = async (email: string, pass: string): Promise<AuthOutcome> => {
     setIsLoading(true);
     try {
       const response = await api.post('/auth/login', { email, password: pass });
-      const { access_token, user: loggedUser } = response.data;
-      persistSession(loggedUser, access_token);
-      setUser(loggedUser);
-      return loggedUser;
-    } catch (error) {
-      console.error('Login Error:', error);
-      return null;
+      const data = response.data;
+      // Sở hữu cả 2 vai trò → BE trả tempToken, FE phải hỏi chọn workspace.
+      if (data?.requiresRoleSelection) {
+        return { requiresRoleSelection: true, tempToken: data.tempToken, allowedRoles: data.allowedRoles, message: data.message };
+      }
+      persistSession(data.user, data.access_token);
+      setUser(data.user);
+      return { requiresRoleSelection: false, user: data.user, message: data.message };
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Hoàn tất login sau khi user chọn vai trò (login-time). Dùng tempToken.
+  const selectRole = async (tempToken: string, role: AppRole): Promise<User | null> => {
+    const { data } = await api.post('/auth/select-role', { tempToken, role });
+    persistSession(data.user, data.access_token);
+    setUser(data.user);
+    return data.user;
+  };
+
+  // Đổi workspace khi đang đăng nhập (nút "Đổi vai trò"). Dùng access token hiện tại.
+  const switchRole = async (role: AppRole): Promise<User | null> => {
+    const { data } = await api.post('/auth/switch-role', { role });
+    persistSession(data.user, data.access_token);
+    setUser(data.user);
+    return data.user;
+  };
+
   // ─── Google sign-in / sign-up ───────────────────────────────────────────
   // signInWithPopup → idToken → /auth/sync (which upserts the User row keyed by
   // firebase_uid, refreshes display_name/photo_url/provider, bumps last_login_at).
-  const authenticateGoogle = async (mode: 'login' | 'register', role: GoogleAuthRole) => {
+  const loginWithGoogle = async (role: GoogleAuthRole): Promise<AuthOutcome> => {
     setIsLoading(true);
     syncingRef.current = true;
     try {
       const idToken = await getGoogleIdToken();
-
-      if (mode === 'login') {
-        const synced = await syncFirebaseUser(idToken, role);
-        persistSession(synced.user, synced.access_token);
-        setUser(synced.user);
-        return { message: synced.message || 'Đăng nhập thành công', user: synced.user };
+      const synced = await syncFirebaseUser(idToken, role);
+      if (synced?.requiresRoleSelection) {
+        return { requiresRoleSelection: true, tempToken: synced.tempToken, allowedRoles: synced.allowedRoles, message: synced.message };
       }
+      persistSession(synced.user, synced.access_token);
+      setUser(synced.user);
+      return { requiresRoleSelection: false, user: synced.user, message: synced.message || 'Đăng nhập thành công' };
+    } finally {
+      syncingRef.current = false;
+      setIsLoading(false);
+    }
+  };
 
-      // mode === 'register' — strict endpoint that 409s if the role already exists
+  const registerWithGoogle = async (role: GoogleAuthRole): Promise<{ message: string; user?: User }> => {
+    setIsLoading(true);
+    syncingRef.current = true;
+    try {
+      const idToken = await getGoogleIdToken();
+      // strict endpoint that 409s if the role already exists
       const response = await api.post('/auth/google/register', { idToken, role });
       return { message: response.data.message || 'Đăng ký thành công', user: response.data.user };
     } finally {
@@ -179,9 +229,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     }
   };
-
-  const loginWithGoogle = (role: GoogleAuthRole) => authenticateGoogle('login', role);
-  const registerWithGoogle = (role: GoogleAuthRole) => authenticateGoogle('register', role);
 
   const becomeSeller = async (): Promise<User | null> => {
     try {
@@ -216,7 +263,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, registerWithGoogle, becomeSeller, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, registerWithGoogle, selectRole, switchRole, becomeSeller, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

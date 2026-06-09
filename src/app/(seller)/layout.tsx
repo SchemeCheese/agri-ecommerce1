@@ -11,18 +11,24 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
+  // Gate theo activeRole (workspace đang dùng), KHÔNG chỉ theo quyền sở hữu. Một
+  // user sở hữu cả 2 vai trò nhưng đang ở workspace BUYER phải bấm "Đổi vai trò"
+  // (đổi activeRole=SELLER) mới vào được — khớp với enforcement strict ở BE guard.
+  // Token cũ chưa có activeRole → fallback theo is_seller để không khoá nhầm.
+  const inSellerMode = user?.activeRole ? user.activeRole === 'SELLER' : !!user?.is_seller;
+
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
         router.push('/login');
-      } else if (!user.is_seller) {
-        // Chưa có quyền seller → về trang chủ. UI Header sẽ gợi ý đăng ký bán hàng.
+      } else if (!inSellerMode) {
+        // Đang ở workspace BUYER (hoặc chưa có quyền seller) → về trang chủ.
         router.push('/');
       }
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, inSellerMode, router]);
 
-  if (isLoading || !user || !user.is_seller) {
+  if (isLoading || !user || !inSellerMode) {
     return <div className="h-screen flex items-center justify-center">Đang tải dữ liệu...</div>;
   }
 

@@ -1,14 +1,30 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Bell, Search, LogOut } from 'lucide-react';
+import { Bell, Search, LogOut, Repeat } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
 
 export const SellerHeader = () => {
   const [storeName, setStoreName] = useState('');
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
+  const router = useRouter();
+  const [switching, setSwitching] = useState(false);
+  // Sở hữu cả 2 vai trò → cho phép quay về workspace mua hàng.
+  const canSwitch = !!user?.is_buyer && !!user?.is_seller;
+
+  const handleSwitchToBuyer = async () => {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      const u = await switchRole('BUYER');
+      if (u) router.push('/');
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   useEffect(() => {
     api.get('/profile/me')
@@ -56,6 +72,20 @@ export const SellerHeader = () => {
           <Bell size={18} />
           <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
         </button>
+
+        {/* Đổi vai trò → quay về workspace mua hàng (chỉ khi sở hữu cả 2 vai trò) */}
+        {canSwitch && (
+          <button
+            type="button"
+            onClick={handleSwitchToBuyer}
+            disabled={switching}
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-white hover:bg-green-50 text-gray-700 hover:text-green-600 rounded-full border border-gray-100 shadow-sm hover:shadow-md transition-all font-semibold text-sm disabled:opacity-60"
+            title="Chuyển sang Mua hàng"
+          >
+            <Repeat size={16} />
+            <span className="hidden md:inline">Mua hàng</span>
+          </button>
+        )}
 
         <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
 
