@@ -8,6 +8,7 @@
 // avoids adding a new BE endpoint just for one page.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { DisputeFormModal } from '@/components/dispute/DisputeFormModal';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -69,6 +70,7 @@ export default function OrderDetailsPage() {
   const [paying, setPaying] = useState(false);
   const [changing, setChanging] = useState(false);
   const [changeOpen, setChangeOpen] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
 
   const refresh = async () => {
     try {
@@ -188,6 +190,28 @@ export default function OrderDetailsPage() {
         </div>
 
         <OrderTimeline currentIndex={timelineStepIndex} currentStatus={order.status} />
+
+        {['SHIPPING', 'ISSUE_REPORTED', 'COMPLETED'].includes(order.status) && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
+            <div className="flex items-start gap-2 text-sm text-orange-700">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>Có vấn đề với đơn hàng? Gửi khiếu nại kèm bằng chứng (ảnh) để Admin phân xử. Hệ thống không tự hoàn tiền.</span>
+            </div>
+            <button
+              onClick={() => setDisputeOpen(true)}
+              className="shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 transition"
+            >
+              Gửi khiếu nại
+            </button>
+          </div>
+        )}
+        <DisputeFormModal
+          mode="buyer"
+          orderId={order.id}
+          open={disputeOpen}
+          onClose={() => setDisputeOpen(false)}
+          onSuccess={() => window.location.reload()}
+        />
 
         {isAwaitingMomo && (
           <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">

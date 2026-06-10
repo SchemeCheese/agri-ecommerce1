@@ -147,6 +147,34 @@ export interface UserDetails {
   sellerSummary: SellerSummary;
 }
 
+// ─── 360° product details ─────────────────────────────────────────────────────
+export interface ProductDetails {
+  product: {
+    id: string;
+    name: string;
+    description: string | null;
+    reference_price: string;
+    stock_quantity: string;
+    unit: string;
+    location: string | null;
+    certification: string | null;
+    min_negotiation_qty: string | null;
+    status: 'ACTIVE' | 'OUT_OF_STOCK' | 'INACTIVE' | 'DELETED';
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    seller: {
+      id: string;
+      full_name: string;
+      email: string;
+      profile: { store_name: string | null; address: string | null; is_verified: boolean } | null;
+    };
+    category: { id: number; name: string };
+  };
+  images: string[];
+  stats: { soldQuantity: number; completedOrderItems: number; timesOrdered: number };
+}
+
 // ─── API calls ───────────────────────────────────────────────────────────────
 export const adminApi = {
   dashboard: () => api.get<DashboardData>('/admin/analytics/dashboard').then((r) => r.data),
@@ -163,6 +191,7 @@ export const adminApi = {
 
   listProducts: (params: { page?: number; limit?: number; search?: string; status?: string }) =>
     api.get<Paginated<AdminProduct>>('/admin/products', { params }).then((r) => r.data),
+  productDetails: (id: string) => api.get<ProductDetails>(`/admin/products/${id}/details`).then((r) => r.data),
   moderateProduct: (id: string, status: 'ACTIVE' | 'INACTIVE', reason?: string) =>
     api.patch(`/admin/products/${id}/moderation`, { status, reason }).then((r) => r.data),
 

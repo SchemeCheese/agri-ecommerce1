@@ -179,13 +179,25 @@ export default function ProfilePage() {
           } catch {}
         }
       }
-      await api.post('/reviews', {
-        order_id: orderId,
-        product_id: review.product_id,
-        rating: review.rating,
-        comment: review.comment,
-        ...(imageUrls.length > 0 && { images: imageUrls }),
-      });
+      try {
+        await api.post('/reviews', {
+          order_id: orderId,
+          product_id: review.product_id,
+          rating: review.rating,
+          comment: review.comment,
+          ...(imageUrls.length > 0 && { images: imageUrls }),
+        });
+      } catch (err: any) {
+        // Chống đánh giá trùng: BE có @@unique([order_id, reviewer_id]).
+        const status = err?.response?.status;
+        const body = JSON.stringify(err?.response?.data ?? '');
+        if (status === 409 || /unique|duplicate|P2002|đã đánh giá/i.test(body)) {
+          alert('Bạn đã đánh giá đơn hàng này rồi. Mỗi đơn chỉ được đánh giá một lần.');
+        } else {
+          alert(err?.response?.data?.message ?? 'Gửi đánh giá thất bại. Vui lòng thử lại.');
+        }
+        return;
+      }
     }
     setShowWriteReview(null);
     await refreshOrders();
@@ -204,7 +216,7 @@ export default function ProfilePage() {
       case 'CONFIRMED': return { text: 'Chờ vận chuyển', color: 'text-blue-600 bg-blue-50 border border-blue-200',        icon: <CheckCircle2 size={12}/> };
       case 'SHIPPING':  return { text: 'Đang giao',       color: 'text-purple-600 bg-purple-50 border border-purple-200', icon: <Truck size={12}/> };
       case 'COMPLETED': return { text: 'Đã nhận hàng',   color: 'text-green-600 bg-green-50 border border-green-200',    icon: <PackageCheck size={12}/> };
-      case 'ISSUE_REPORTED': return { text: 'Có sự cố',     color: 'text-orange-600 bg-orange-50 border border-orange-200', icon: <AlertTriangle size={12}/> };
+      case 'ISSUE_REPORTED': return { text: 'Đang tranh chấp', color: 'text-orange-600 bg-orange-50 border border-orange-200', icon: <AlertTriangle size={12}/> };
       case 'FAILED':    return { text: 'Giao thất bại',   color: 'text-red-600 bg-red-50 border border-red-200',         icon: <XCircle size={12}/> };
       case 'CANCELLED': return { text: 'Đã hủy',          color: 'text-red-500 bg-red-50 border border-red-200',          icon: <XCircle size={12}/> };
       default:          return { text: 'Đang xử lý',      color: 'text-blue-600 bg-blue-50 border border-blue-200',       icon: <Package size={12}/> };

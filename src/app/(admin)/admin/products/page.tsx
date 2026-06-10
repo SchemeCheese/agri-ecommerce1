@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Search, EyeOff, Eye } from 'lucide-react';
 import { adminApi, formatVnd, type AdminProduct, type Paginated } from '@/services/adminApi';
 import { Pagination } from '@/components/ui/pagination';
+import { ProductDetailSheet } from '@/components/admin/ProductDetailSheet';
 
 const STATUS_STYLE: Record<string, string> = {
   ACTIVE: 'bg-green-50 text-green-700',
@@ -18,6 +19,12 @@ export default function AdminProductsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const openDetails = (id: string) => {
+    setSelectedProductId(id);
+    setSheetOpen(true);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,7 +98,7 @@ export default function AdminProductsPage() {
               </tr>
             ) : data && data.items.length > 0 ? (
               data.items.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
+                <tr key={p.id} onClick={() => openDetails(p.id)} className="cursor-pointer hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-800">{p.name}</p>
                     <p className="text-xs text-slate-400">{p.category?.name}</p>
@@ -106,7 +113,10 @@ export default function AdminProductsPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       disabled={busyId === p.id || p.status === 'DELETED'}
-                      onClick={() => moderate(p)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moderate(p);
+                      }}
                       className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${
                         p.status === 'ACTIVE' ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-green-50 text-green-700 hover:bg-green-100'
                       }`}
@@ -135,6 +145,8 @@ export default function AdminProductsPage() {
       </div>
 
       {data ? <Pagination page={data.page} total={data.total} limit={data.limit} onPageChange={setPage} /> : null}
+
+      <ProductDetailSheet productId={selectedProductId} open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
   );
 }

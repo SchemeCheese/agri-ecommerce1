@@ -9,6 +9,7 @@ import {
   CreditCard, AlertTriangle, RefreshCw, ShieldAlert
 } from 'lucide-react';
 import { OrderTimeline } from '@/components/ui/OrderTimeline';
+import { DisputeFormModal } from '@/components/dispute/DisputeFormModal';
 
 /* ─────────────────────── TYPES ─────────────────────── */
 interface OrderItem {
@@ -39,7 +40,7 @@ const TABS = [
   { id: 'CONFIRMED',      label: 'Chờ vận chuyển'   },
   { id: 'SHIPPING',       label: 'Đang giao'         },
   { id: 'COMPLETED',      label: 'Đã giao'           },
-  { id: 'ISSUE_REPORTED', label: 'Có sự cố'          },
+  { id: 'ISSUE_REPORTED', label: 'Đang tranh chấp'   },
   { id: 'CANCELLED',      label: 'Đã hủy'            },
   { id: 'FAILED',         label: 'Thất lạc'          },
 ];
@@ -49,7 +50,7 @@ const STATUS_STYLE: Record<string, { text: string; cls: string; icon: React.Reac
   CONFIRMED:      { text: 'Chờ vận chuyển', cls: 'text-blue-600 bg-blue-50 border border-blue-200',          icon: <CheckCircle2 size={12}/>    },
   SHIPPING:       { text: 'Đang giao',      cls: 'text-purple-600 bg-purple-50 border border-purple-200',    icon: <Truck size={12}/>           },
   COMPLETED:      { text: 'Đã giao',        cls: 'text-green-600 bg-green-50 border border-green-200',       icon: <PackageCheck size={12}/>    },
-  ISSUE_REPORTED: { text: 'Có sự cố',       cls: 'text-orange-600 bg-orange-50 border border-orange-200',    icon: <AlertTriangle size={12}/>   },
+  ISSUE_REPORTED: { text: 'Đang tranh chấp', cls: 'text-orange-600 bg-orange-50 border border-orange-200',    icon: <AlertTriangle size={12}/>   },
   FAILED:         { text: 'Thất lạc',       cls: 'text-red-600 bg-red-50 border border-red-200',             icon: <XCircle size={12}/>         },
   CANCELLED:      { text: 'Đã hủy',         cls: 'text-red-500 bg-red-50 border border-red-200',             icon: <XCircle size={12}/>         },
 };
@@ -63,6 +64,7 @@ export default function SellerOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -286,8 +288,21 @@ export default function SellerOrdersPage() {
           onShip={() => handleShip(selectedOrder.id)}
           onCancelClick={() => setShowCancelDialog(true)}
           onConfirmLost={() => handleConfirmLost(selectedOrder.id)}
+          onRespondDispute={() => setDisputeOrderId(selectedOrder.id)}
         />
       )}
+
+      {/* Seller gửi bằng chứng giải trình cho khiếu nại */}
+      <DisputeFormModal
+        mode="seller"
+        orderId={disputeOrderId ?? ''}
+        open={!!disputeOrderId}
+        onClose={() => setDisputeOrderId(null)}
+        onSuccess={() => {
+          setDisputeOrderId(null);
+          fetchOrders();
+        }}
+      />
 
       {/* Cancel Dialog */}
       {showCancelDialog && selectedOrder && (
@@ -303,7 +318,7 @@ export default function SellerOrdersPage() {
 
 /* ═══════════════════════ SELLER ORDER DIALOG ═══════════════════════ */
 function SellerOrderDialog({
-  order, actionLoading, onClose, onConfirm, onShip, onCancelClick, onConfirmLost
+  order, actionLoading, onClose, onConfirm, onShip, onCancelClick, onConfirmLost, onRespondDispute
 }: {
   order: Order;
   actionLoading: boolean;
@@ -312,6 +327,7 @@ function SellerOrderDialog({
   onShip: () => void;
   onCancelClick: () => void;
   onConfirmLost: () => void;
+  onRespondDispute: () => void;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const s = STATUS_STYLE[order.status] ?? STATUS_STYLE['CANCELLED'];
@@ -467,22 +483,27 @@ function SellerOrderDialog({
                   )}
                 </div>
               </div>
-              {!isCOD && (
-                <div className="flex items-start gap-2 bg-blue-50 rounded-xl p-3 border border-blue-100">
-                  <ShieldAlert size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700">
-                    Đơn này thanh toán online — nếu xác nhận thất lạc, hệ thống sẽ tự động chuyển trạng thái hoàn tiền (<span className="font-bold">REFUNDING</span>) và gửi email thông báo cho người mua.
-                  </p>
-                </div>
-              )}
+              <div className="flex items-start gap-2 bg-blue-50 rounded-xl p-3 border border-blue-100">
+                <ShieldAlert size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700">
+                  Hệ thống <span className="font-bold">không tự hoàn tiền</span>. Vui lòng gửi bằng chứng đóng gói để
+                  Admin phân xử. Admin là người quyết định hoàn tiền hay không dựa trên bằng chứng 2 phía.
+                </p>
+              </div>
+              <button
+                onClick={onRespondDispute}
+                className="w-full py-3.5 rounded-xl bg-[#16A34A] hover:bg-green-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all"
+              >
+                <ShieldAlert size={18}/> Gửi bằng chứng giải trình
+              </button>
               <button
                 onClick={onConfirmLost}
                 disabled={actionLoading}
-                className="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70 transition-all shadow-lg shadow-orange-500/20"
+                className="w-full py-3 rounded-xl border border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70 transition-all"
               >
                 {actionLoading
                   ? <Loader2 className="animate-spin" size={18}/>
-                  : <><AlertTriangle size={18}/> Xác nhận thất lạc</>}
+                  : <><AlertTriangle size={18}/> Xác nhận thất lạc (chuyển Admin)</>}
               </button>
             </div>
           )}
