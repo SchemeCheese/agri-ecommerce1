@@ -61,6 +61,9 @@ export default function SellerChatPage() {
 
   const socketRef      = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  // true = cuộn xuống đáy 1 lần (mở hội thoại / tự gửi). Tin đến khác → chỉ cuộn nếu gần đáy.
+  const forceScrollBottomRef = useRef(true);
   const inputRef       = useRef<HTMLInputElement>(null);
   const activeConvIdRef = useRef<string | null>(null);
   const router          = useRouter();
@@ -93,6 +96,7 @@ export default function SellerChatPage() {
       const res = await api.get(`/chat/conversations/${conversationId}/messages?limit=30`);
       const payload = res.data;
       const items = Array.isArray(payload) ? payload : payload?.items ?? [];
+      forceScrollBottomRef.current = true; // mở hội thoại → cuộn xuống đáy 1 lần
       setMessages(items);
 
       // Extract orderInfo from NEGOTIATION_QUOTE messages
@@ -174,15 +178,24 @@ export default function SellerChatPage() {
   // ── Init ───────────────────────────────────────────────────────────────────
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
-  // ── Auto-scroll ───────────────────────────────────────────────────────────
+  // ── Auto-scroll thông minh (không kéo user về đáy khi đang đọc tin cũ) ──────
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesScrollRef.current;
+    if (forceScrollBottomRef.current) {
+      forceScrollBottomRef.current = false;
+      messagesEndRef.current?.scrollIntoView({ block: 'end' });
+      return;
+    }
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
   }, [messages]);
 
   // ── Send message ─────────────────────────────────────────────────────────
   const handleSend = useCallback(() => {
     if (!inputText.trim() || !activeConv || !socketRef.current) return;
     setSending(true);
+    forceScrollBottomRef.current = true; // tự gửi tin → cuộn xuống đáy
     socketRef.current.emit('sendMessage', {
       conversationId: activeConv.id,
       content: inputText.trim(),
@@ -462,7 +475,7 @@ export default function SellerChatPage() {
             )}
 
             {/* Messages */}
-            <div className="flex-1 bg-gray-50 px-5 py-4 overflow-y-auto space-y-1">
+            <div ref={messagesScrollRef} className="flex-1 min-h-0 bg-gray-50 px-5 py-4 overflow-y-auto space-y-1">
               {loadingMsgs && <ChatSkeleton />}
               {!loadingMsgs && messages.length === 0 && (
                 <div className="text-center py-10"><p className="text-xs text-gray-400">Chưa có tin nhắn</p></div>

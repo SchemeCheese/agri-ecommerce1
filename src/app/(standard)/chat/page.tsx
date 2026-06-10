@@ -119,6 +119,9 @@ function ChatPageInner() {
   const nextCursorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  // true = lần messages tới sẽ CUỘN XUỐNG ĐÁY 1 lần (mở hội thoại / tự gửi tin).
+  // Tin đến khác / prepend tin cũ → false → chỉ cuộn nếu user đang ở gần đáy.
+  const forceScrollBottomRef = useRef(true);
 
 
   // ── Load conversations ───────────────────────────────────────────────────
@@ -144,6 +147,7 @@ function ChatPageInner() {
       const payload = res.data;
       const items = Array.isArray(payload) ? payload : payload?.items ?? [];
       const nextCursor = Array.isArray(payload) ? null : payload?.nextCursor ?? null;
+      forceScrollBottomRef.current = true; // mở hội thoại → cuộn xuống đáy 1 lần
       setMessages(items);
       nextCursorRef.current = nextCursor;
       setHasMoreMessages(!!nextCursor);
@@ -491,15 +495,29 @@ function ChatPageInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellerIdParam, convIdParam]);
 
-  // ── Scroll to bottom on new messages ─────────────────────────────────────
+  // ── Auto-scroll thông minh ───────────────────────────────────────────────
+  // KHÔNG cuộn xuống đáy ở mọi render. Chỉ cuộn khi:
+  //  1) forceScrollBottom (mở hội thoại / tự gửi tin) → cuộn tức thì.
+  //  2) tin mới đến mà user đang ở GẦN đáy (<120px) → cuộn mượt.
+  // Khi user kéo lên đọc tin cũ hoặc prepend tin cũ (loadMore) → KHÔNG cuộn,
+  // nên không "kéo" user trở lại đáy. Vị trí khi loadMore do onScroll giữ.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesScrollRef.current;
+    if (forceScrollBottomRef.current) {
+      forceScrollBottomRef.current = false;
+      messagesEndRef.current?.scrollIntoView({ block: 'end' });
+      return;
+    }
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
   }, [messages]);
 
   // ── Send message ─────────────────────────────────────────────────────────
   const handleSend = useCallback(() => {
     if (!inputText.trim() || !activeConv || !socketRef.current) return;
     setSending(true);
+    forceScrollBottomRef.current = true; // tự gửi tin → cuộn xuống đáy khi tin echo về
     socketRef.current.emit('sendMessage', {
       conversationId: activeConv.id,
       content:        inputText.trim(),
@@ -543,6 +561,7 @@ function ChatPageInner() {
       const url: string = res.data?.url;
       if (!url) throw new Error('Upload thất bại.');
 
+      forceScrollBottomRef.current = true; // tự gửi ảnh → cuộn xuống đáy
       socketRef.current.emit('sendImageMessage', {
         conversationId: activeConv.id,
         imageUrl: url,
@@ -812,7 +831,7 @@ function ChatPageInner() {
                   {/* Messages */}
                   <div
                     ref={messagesScrollRef}
-                    className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/50"
+                    className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/50"
                     onScroll={(e) => {
                       const el = e.currentTarget;
                       if (el.scrollTop < 80 && hasMoreMessages && !loadingMoreRef.current) {
@@ -998,8 +1017,16 @@ function ChatPageInner() {
                                 <img
                                   src={imgUrl}
                                   alt="Ảnh"
-                                  className="w-full h-auto max-h-72 object-cover block"
+                                  className="w-48 max-w-full h-auto max-h-72 object-cover block bg-gray-100"
                                   loading="lazy"
+                                  onError={(e) => {
+                                    // Ảnh lỗi → tránh layout vỡ: thay bằng placeholder cố định.
+                                    const el = e.currentTarget;
+                                    if (el.dataset.fallback) return;
+                                    el.dataset.fallback = '1';
+                                    el.src = '/placeholder.png';
+                                    el.className = 'w-48 h-32 object-contain block bg-gray-100 p-4 opacity-60';
+                                  }}
                                 />
                                 {msg.message_content && (
                                   <div className="px-3 py-1.5 text-xs text-gray-700">{msg.message_content}</div>
