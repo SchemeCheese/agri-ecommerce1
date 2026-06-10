@@ -1,0 +1,164 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { Loader2, Search, Ban, CheckCircle2 } from 'lucide-react';
+import { adminApi, type AdminUser, type Paginated } from '@/services/adminApi';
+
+export default function AdminUsersPage() {
+  const [data, setData] = useState<Paginated<AdminUser> | null>(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setData(await adminApi.listUsers({ page, limit: 15, search: search.trim() || undefined }));
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const toggle = async (u: AdminUser) => {
+    if (u.is_admin) return;
+    setBusyId(u.id);
+    try {
+      await adminApi.setUserStatus(u.id, !u.is_active);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.message ?? 'Thao tác thất bại.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const roleBadges = (u: AdminUser) =>
+    [u.is_admin && 'ADMIN', u.is_seller && 'SELLER', u.is_buyer && 'BUYER'].filter(Boolean).join(' · ');
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-slate-800">Quản lý người dùng</h2>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPage(1);
+            void load();
+          }}
+          className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2"
+        >
+          <Search className="h-4 w-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm tên / email / SĐT"
+            className="w-56 text-sm outline-none"
+          />
+        </form>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Người dùng</th>
+              <th className="px-4 py-3">Vai trò</th>
+              <th className="px-4 py-3">OTP</th>
+              <th className="px-4 py-3">Trạng thái</th>
+              <th className="px-4 py-3 text-right">Hành động</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-10 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#16A34A]" />
+                </td>
+              </tr>
+            ) : data && data.items.length > 0 ? (
+              data.items.map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-800">{u.full_name}</p>
+                    <p className="text-xs text-slate-400">{u.email}</p>
+                    {u.phone_number ? <p className="text-xs text-slate-400">{u.phone_number}</p> : null}
+                  </td>
+                  <td className="px-4 py-3 text-xs font-semibold text-slate-600">{roleBadges(u)}</td>
+                  <td className="px-4 py-3">
+                    {u.verified_email ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        u.is_active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                      }`}
+                    >
+                      {u.is_active ? 'Hoạt động' : 'Đã khóa'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      disabled={u.is_admin || busyId === u.id}
+                      onClick={() => toggle(u)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${
+                        u.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100'
+                      }`}
+                    >
+                      {busyId === u.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : u.is_active ? (
+                        <Ban className="h-3.5 w-3.5" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                      {u.is_active ? 'Khóa' : 'Mở khóa'}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                  Không có người dùng nào.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {data && data.total > data.limit ? (
+        <div className="flex items-center justify-between text-sm text-slate-500">
+          <span>
+            Trang {data.page} · Tổng {data.total}
+          </span>
+          <div className="flex gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
+            >
+              Trước
+            </button>
+            <button
+              disabled={page * data.limit >= data.total}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}

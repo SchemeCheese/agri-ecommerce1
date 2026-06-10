@@ -18,28 +18,35 @@ function LoginContent() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [selectedRole, setSelectedRole] = useState<'BUYER' | 'SELLER'>('BUYER');
   const [loading, setLoading] = useState(false);
-  // Khi BE yêu cầu chọn workspace (sở hữu cả BUYER + SELLER) → mở modal.
-  const [roleChoice, setRoleChoice] = useState<{ tempToken: string; allowedRoles: ('BUYER' | 'SELLER' | 'ADMIN')[] } | null>(null);
 
-  // Điều hướng theo activeRole đã được BE cấp: SELLER → /dashboard, còn lại → /.
-  const landingPathFor = (role?: string) => (role === 'SELLER' ? '/dashboard' : '/');
+  // Điều hướng theo activeRole đã được BE cấp:
+  //  - ADMIN  → /admin/dashboard (vào thẳng trang quản trị)
+  //  - SELLER → /dashboard (kênh người bán)
+  //  - BUYER  → / (trang mua hàng)
+  const landingPathFor = (role?: string) =>
+    role === 'ADMIN' ? '/admin/dashboard' : role === 'SELLER' ? '/dashboard' : '/';
 
   const finishWithUser = (u: { activeRole?: string }) => {
     showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
     setTimeout(() => router.push(landingPathFor(u.activeRole)), 1000);
   };
 
+  // Tài khoản sở hữu CẢ buyer + seller: vào thẳng workspace MUA HÀNG (không hỏi
+  // chọn vai trò). Nút "Chuyển sang Bán hàng" đã có sẵn ở Header để đổi qua /dashboard.
+  const resolveOutcome = async (outcome: Awaited<ReturnType<typeof login>>) => {
+    if (outcome.requiresRoleSelection) {
+      const u = await selectRole(outcome.tempToken, 'BUYER');
+      if (u) finishWithUser(u);
+      return;
+    }
+    finishWithUser(outcome.user);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const outcome = await login(formData.email, formData.password);
-      if (outcome.requiresRoleSelection) {
-        setRoleChoice({ tempToken: outcome.tempToken, allowedRoles: outcome.allowedRoles });
-        setLoading(false);
-        return;
-      }
-      finishWithUser(outcome.user);
+      await resolveOutcome(await login(formData.email, formData.password));
     } catch (error: any) {
       const status = error?.response?.status;
       const msg = status === 403
@@ -53,14 +60,7 @@ function LoginContent() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const outcome = await loginWithGoogle(selectedRole);
-      if (outcome.requiresRoleSelection) {
-        setRoleChoice({ tempToken: outcome.tempToken, allowedRoles: outcome.allowedRoles });
-        setLoading(false);
-        return;
-      }
-      showToast(outcome.message || 'Đăng nhập Google thành công!', 'success');
-      setTimeout(() => router.push(landingPathFor(outcome.user.activeRole)), 1000);
+      await resolveOutcome(await loginWithGoogle(selectedRole));
     } catch (error: any) {
       // User-initiated popup dismissal — not a real error.
       const code = error?.code ?? error?.cause?.code;
@@ -74,29 +74,6 @@ function LoginContent() {
     }
   };
 
-  // Người dùng chọn workspace trong modal → đổi tempToken lấy token đầy đủ.
-  const handleSelectRole = async (role: 'BUYER' | 'SELLER' | 'ADMIN') => {
-    if (!roleChoice) return;
-    setLoading(true);
-    try {
-      const u = await selectRole(roleChoice.tempToken, role);
-      setRoleChoice(null);
-      if (u) finishWithUser(u);
-    } catch (error: any) {
-      showToast(error?.response?.data?.message || 'Không thể chọn vai trò. Vui lòng đăng nhập lại.', 'error');
-      setRoleChoice(null);
-      setLoading(false);
-    }
-  };
-
-  const fillCredential = (type: 'buyer' | 'seller') => {
-    if (type === 'buyer') {
-      setFormData({ email: 'khach@gmail.com', password: '123456' });
-    } else {
-      setFormData({ email: 'shop2@gmail.com', password: '123456' });
-    }
-  };
-
   const selectGoogleRole = (role: 'buyer' | 'seller') => {
     setSelectedRole(role === 'buyer' ? 'BUYER' : 'SELLER');
   };
@@ -104,34 +81,6 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex bg-white font-sans">
       {ToastNode}
-
-      {/* --- MODAL CHỌN WORKSPACE (khi tài khoản sở hữu cả BUYER + SELLER) --- */}
-      {roleChoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 text-center">Chọn không gian làm việc</h3>
-            <p className="mt-1 text-sm text-gray-500 text-center">Tài khoản của bạn có nhiều vai trò. Hãy chọn để tiếp tục.</p>
-            <div className="mt-6 space-y-3">
-              {roleChoice.allowedRoles.includes('BUYER') && (
-                <button type="button" onClick={() => handleSelectRole('BUYER')} disabled={loading}
-                  className="w-full flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50 transition disabled:opacity-60">
-                  <User size={20} className="text-green-600" />
-                  <span className="font-semibold text-gray-800">Người mua</span>
-                </button>
-              )}
-              {roleChoice.allowedRoles.includes('SELLER') && (
-                <button type="button" onClick={() => handleSelectRole('SELLER')} disabled={loading}
-                  className="w-full flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50 transition disabled:opacity-60">
-                  <Store size={20} className="text-green-600" />
-                  <span className="font-semibold text-gray-800">Người bán (Quản lý cửa hàng)</span>
-                </button>
-              )}
-            </div>
-            <button type="button" onClick={() => { setRoleChoice(null); setLoading(false); }}
-              className="mt-5 w-full text-sm text-gray-500 hover:text-gray-700">Hủy</button>
-          </div>
-        </div>
-      )}
 
       {/* --- CỘT TRÁI: ẢNH --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">
@@ -157,16 +106,6 @@ function LoginContent() {
             <p className="mt-2 text-sm text-gray-600 font-sans">
               Vui lòng đăng nhập để quản lý đơn hàng và thanh toán.
             </p>
-          </div>
-
-          {/* --- NÚT TEST NHANH --- */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <button type="button" onClick={() => fillCredential('buyer')} className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition border border-blue-100">
-              <User size={16} /> Test Khách
-            </button>
-            <button type="button" onClick={() => fillCredential('seller')} className="flex items-center justify-center gap-2 py-2 px-4 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition border border-green-100">
-              <Store size={16} /> Test Chủ Shop
-            </button>
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
