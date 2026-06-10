@@ -95,12 +95,65 @@ export interface DisputeDetail extends DisputeListItem {
   };
 }
 
+// ─── 360° user details ───────────────────────────────────────────────────────
+export interface UserDetailUser {
+  id: string;
+  email: string;
+  full_name: string;
+  phone_number: string | null;
+  verified_email: boolean;
+  is_active: boolean;
+  is_admin: boolean;
+  is_buyer: boolean;
+  is_seller: boolean;
+  created_at: string;
+}
+interface RecentOrder {
+  id: string;
+  status: string;
+  final_total_price: string;
+  created_at: string;
+  seller?: { id: string; full_name: string };
+  buyer?: { id: string; full_name: string };
+}
+interface RecentProductRow {
+  id: string;
+  name: string;
+  reference_price: string;
+  stock_quantity: string;
+  unit: string;
+  status: string;
+  created_at: string;
+}
+export interface BuyerSummary {
+  totalOrders: number;
+  totalSpent: number;
+  ordersByStatus: Record<string, number>;
+  recentOrders: RecentOrder[];
+  reviewsWrittenCount: number;
+}
+export interface SellerSummary {
+  totalProducts: number;
+  productsByStatus: Record<string, number>;
+  totalSoldOrders: number;
+  totalRevenue: number;
+  ordersByStatus: Record<string, number>;
+  recentProducts: RecentProductRow[];
+  recentSales: RecentOrder[];
+}
+export interface UserDetails {
+  user: UserDetailUser;
+  buyerSummary: BuyerSummary;
+  sellerSummary: SellerSummary;
+}
+
 // ─── API calls ───────────────────────────────────────────────────────────────
 export const adminApi = {
   dashboard: () => api.get<DashboardData>('/admin/analytics/dashboard').then((r) => r.data),
 
   listUsers: (params: { page?: number; limit?: number; search?: string }) =>
     api.get<Paginated<AdminUser>>('/admin/users', { params }).then((r) => r.data),
+  userDetails: (id: string) => api.get<UserDetails>(`/admin/users/${id}/details`).then((r) => r.data),
   setUserStatus: (id: string, is_active: boolean) =>
     api.patch(`/admin/users/${id}/status`, { is_active }).then((r) => r.data),
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Search, EyeOff, Eye } from 'lucide-react';
 import { adminApi, formatVnd, type AdminProduct, type Paginated } from '@/services/adminApi';
+import { Pagination } from '@/components/ui/pagination';
 
 const STATUS_STYLE: Record<string, string> = {
   ACTIVE: 'bg-green-50 text-green-700',
@@ -133,25 +134,7 @@ export default function AdminProductsPage() {
         </table>
       </div>
 
-      {data && data.total > data.limit ? (
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>
-            Trang {data.page} · Tổng {data.total}
-          </span>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">
-              Trước
-            </button>
-            <button
-              disabled={page * data.limit >= data.total}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
-            >
-              Sau
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {data ? <Pagination page={data.page} total={data.total} limit={data.limit} onPageChange={setPage} /> : null}
     </div>
   );
 }

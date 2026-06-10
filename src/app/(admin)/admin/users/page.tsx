@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Search, Ban, CheckCircle2 } from 'lucide-react';
 import { adminApi, type AdminUser, type Paginated } from '@/services/adminApi';
+import { Pagination } from '@/components/ui/pagination';
+import { UserDetailSheet } from '@/components/admin/UserDetailSheet';
 
 export default function AdminUsersPage() {
   const [data, setData] = useState<Paginated<AdminUser> | null>(null);
@@ -10,6 +12,12 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const openDetails = (id: string) => {
+    setSelectedUserId(id);
+    setSheetOpen(true);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,7 +90,7 @@ export default function AdminUsersPage() {
               </tr>
             ) : data && data.items.length > 0 ? (
               data.items.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50">
+                <tr key={u.id} onClick={() => openDetails(u.id)} className="cursor-pointer hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-800">{u.full_name}</p>
                     <p className="text-xs text-slate-400">{u.email}</p>
@@ -108,7 +116,10 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       disabled={u.is_admin || busyId === u.id}
-                      onClick={() => toggle(u)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggle(u);
+                      }}
                       className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${
                         u.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100'
                       }`}
@@ -136,29 +147,9 @@ export default function AdminUsersPage() {
         </table>
       </div>
 
-      {data && data.total > data.limit ? (
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>
-            Trang {data.page} · Tổng {data.total}
-          </span>
-          <div className="flex gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
-            >
-              Trước
-            </button>
-            <button
-              disabled={page * data.limit >= data.total}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
-            >
-              Sau
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {data ? <Pagination page={data.page} total={data.total} limit={data.limit} onPageChange={setPage} /> : null}
+
+      <UserDetailSheet userId={selectedUserId} open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
   );
 }

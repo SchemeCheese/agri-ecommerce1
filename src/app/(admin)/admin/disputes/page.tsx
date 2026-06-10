@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, ChevronRight } from 'lucide-react';
 import { adminApi, formatVnd, type DisputeListItem, type Paginated } from '@/services/adminApi';
+import { Pagination } from '@/components/ui/pagination';
 
 const STATUS_TABS: { value: string; label: string }[] = [
   { value: '', label: 'Tất cả' },
@@ -23,16 +24,17 @@ const STATUS_STYLE: Record<string, string> = {
 export default function AdminDisputesPage() {
   const [data, setData] = useState<Paginated<DisputeListItem> | null>(null);
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await adminApi.listDisputes({ status: status || undefined, limit: 30 }));
+      setData(await adminApi.listDisputes({ status: status || undefined, page, limit: 15 }));
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [status, page]);
 
   useEffect(() => {
     void load();
@@ -46,7 +48,10 @@ export default function AdminDisputesPage() {
         {STATUS_TABS.map((t) => (
           <button
             key={t.value}
-            onClick={() => setStatus(t.value)}
+            onClick={() => {
+              setStatus(t.value);
+              setPage(1);
+            }}
             className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
               status === t.value ? 'bg-[#16A34A] text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
@@ -88,6 +93,8 @@ export default function AdminDisputesPage() {
           <div className="py-12 text-center text-slate-400">Không có khiếu nại nào.</div>
         )}
       </div>
+
+      {data ? <Pagination page={data.page} total={data.total} limit={data.limit} onPageChange={setPage} /> : null}
     </div>
   );
 }
