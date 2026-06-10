@@ -7,30 +7,53 @@ import { formatCurrency } from '@/utils/vi';
 import { Loader2, Store, Star, Package } from 'lucide-react';
 import api from '@/lib/axios';
 import { resolveBackendUrl } from '@/lib/runtime-config';
+import { Pagination } from '@/components/ui/pagination';
 import Link from 'next/link';
 
 const fixImg = (url: string) => resolveBackendUrl(url) || '/placeholder.png';
+const PAGE_SIZE = 12;
 
 function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
   const [shops, setShops] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Shops: lấy từ /search (không phân trang). Reset page khi đổi từ khoá.
   useEffect(() => {
-    if (!query) return;
-    setLoading(true);
-    api.get('/search', { params: { q: query } })
-      .then(res => {
-        setShops(res.data.shops || []);
-        setProducts(res.data.products || []);
-      })
-      .catch(err => console.error('Search error:', err))
-      .finally(() => setLoading(false));
+    setPage(1);
+    if (!query) {
+      setShops([]);
+      return;
+    }
+    api
+      .get('/search', { params: { q: query } })
+      .then((res) => setShops(res.data.shops || []))
+      .catch((err) => console.error('Shop search error:', err));
   }, [query]);
 
-  const totalCount = shops.length + products.length;
+  // Products: endpoint mới có phân trang (PostgreSQL insensitive contains).
+  useEffect(() => {
+    if (!query) {
+      setProducts([]);
+      setTotal(0);
+      return;
+    }
+    setLoading(true);
+    api
+      .get('/products/search', { params: { q: query, page, limit: PAGE_SIZE } })
+      .then((res) => {
+        setProducts(res.data.items || []);
+        setTotal(res.data.total || 0);
+      })
+      .catch((err) => console.error('Product search error:', err))
+      .finally(() => setLoading(false));
+  }, [query, page]);
+
+  const totalCount = shops.length + total;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -38,14 +61,12 @@ function SearchContent() {
         <h1 className="text-2xl font-bold text-gray-900">
           Kết quả cho: &quot;<span className="text-green-600">{query}</span>&quot;
         </h1>
-        {!loading && query && (
-          <p className="text-sm text-gray-500 mt-1">Tìm thấy {totalCount} kết quả</p>
-        )}
+        {!loading && query && <p className="text-sm text-gray-500 mt-1">Tìm thấy {totalCount} kết quả</p>}
       </div>
 
-      {loading ? (
+      {loading && products.length === 0 ? (
         <div className="flex justify-center py-20">
-          <Loader2 className="animate-spin text-green-600" size={32}/>
+          <Loader2 className="animate-spin text-green-600" size={32} />
         </div>
       ) : totalCount === 0 && query ? (
         <div className="text-center py-20 bg-white rounded-xl border shadow-sm">
@@ -55,8 +76,7 @@ function SearchContent() {
         </div>
       ) : (
         <div className="space-y-10">
-
-          {/* === KHU VỰC SHOP (ưu tiên hiển thị trước) === */}
+          {/* === SHOP === */}
           {shops.length > 0 && (
             <section>
               <div className="flex items-center gap-2 mb-4">
@@ -65,13 +85,17 @@ function SearchContent() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {shops.map((shop: any) => (
-                  <Link key={shop.id} href={`/shop/${shop.id}`}
-                    className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all flex flex-col items-center text-center group">
+                  <Link
+                    key={shop.id}
+                    href={`/shop/${shop.id}`}
+                    className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all flex flex-col items-center text-center group"
+                  >
                     <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-green-100 bg-green-50 mb-3 flex items-center justify-center">
-                      {shop.avatar_url
-                        ? <img src={fixImg(shop.avatar_url)} alt={shop.store_name} className="w-full h-full object-cover" />
-                        : <Store size={24} className="text-green-600" />
-                      }
+                      {shop.avatar_url ? (
+                        <img src={fixImg(shop.avatar_url)} alt={shop.store_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Store size={24} className="text-green-600" />
+                      )}
                     </div>
                     <h3 className="font-bold text-gray-800 text-sm mb-1 group-hover:text-green-700 transition-colors line-clamp-1">{shop.store_name}</h3>
                     <div className="flex items-center gap-1 text-xs text-amber-500 font-semibold">
@@ -87,19 +111,19 @@ function SearchContent() {
             </section>
           )}
 
-          {/* === KHU VỰC SẢN PHẨM === */}
-          {products.length > 0 && (
+          {/* === SẢN PHẨM (phân trang) === */}
+          {total > 0 && (
             <section>
               <div className="flex items-center gap-2 mb-4">
                 <Package className="text-green-600" size={20} />
-                <h2 className="text-lg font-bold text-gray-900">Sản phẩm ({products.length})</h2>
+                <h2 className="text-lg font-bold text-gray-900">Sản phẩm ({total})</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {products.map((product: any) => (
                   <ProductCard
                     key={product.id}
                     id={product.id}
-                    slug={product.id}
+                    slug={product.slug ?? product.id}
                     imageUrl={fixImg(product.images?.[0] ?? '')}
                     title={product.name}
                     description={product.description}
@@ -109,6 +133,9 @@ function SearchContent() {
                     sellerId={product.seller_id}
                   />
                 ))}
+              </div>
+              <div className="mt-8">
+                <Pagination page={page} total={total} limit={PAGE_SIZE} onPageChange={setPage} />
               </div>
             </section>
           )}
@@ -120,7 +147,7 @@ function SearchContent() {
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-green-600" size={32}/></div>}>
+    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-green-600" size={32} /></div>}>
       <SearchContent />
     </Suspense>
   );
