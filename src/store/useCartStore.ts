@@ -107,17 +107,23 @@ export const useCartStore = create<CartState>()(
         const validQty = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1;
         const validPrice = Number(product.price) || 0; // Đảm bảo giá cũng là số
 
+        // Tồn kho — chặn thêm vượt quá stock ngay phía client (BE vẫn là chốt chặn cuối).
+        // stock <= 0 hoặc không xác định ⇒ coi như không giới hạn (để BE quyết).
+        const stock = Number(product.stock);
+        const capToStock = (qty: number) =>
+          Number.isFinite(stock) && stock > 0 ? Math.min(qty, stock) : qty;
+
         let updatedCart;
         if (existingItemIndex >= 0) {
           updatedCart = [...currentCart];
           // Đảm bảo item.quantity cũ cũng là số trước khi cộng
           const oldQty = Number(updatedCart[existingItemIndex].quantity) || 0;
-          updatedCart[existingItemIndex].quantity = oldQty + validQty;
+          updatedCart[existingItemIndex].quantity = capToStock(oldQty + validQty);
         } else {
           updatedCart = [...currentCart, {
             ...product,
             price: validPrice,
-            quantity: validQty,
+            quantity: capToStock(validQty),
             // Chống lỗi nếu images không phải mảng
             images: Array.isArray(product.images) ? product.images : [product.images || '/images/placeholder.jpg']
           }];
@@ -158,14 +164,19 @@ export const useCartStore = create<CartState>()(
         const currentCart = state.carts[userId] || [];
 
         // Không cho số lượng giảm xuống dưới 1
-        const validQty = Math.max(1, (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1);
+        const requested = Math.max(1, (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1);
 
         return {
           carts: {
             ...state.carts,
-            [userId]: currentCart.map(item =>
-              item.id === productId ? { ...item, quantity: validQty } : item
-            )
+            [userId]: currentCart.map(item => {
+              if (item.id !== productId) return item;
+              // Cap theo tồn kho của chính item (nếu biết); stock<=0/không rõ ⇒ không giới hạn.
+              const stock = Number(item.stock);
+              const validQty =
+                Number.isFinite(stock) && stock > 0 ? Math.min(requested, stock) : requested;
+              return { ...item, quantity: validQty };
+            })
           }
         };
       }),

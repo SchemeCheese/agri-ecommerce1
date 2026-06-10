@@ -115,7 +115,9 @@ export default function ProductClient({ product, allProducts }: { product: any, 
   const router = useRouter();
   const { user } = useAuth();
 
-  const isUnavailable = !product.is_active || (product.stock ?? 0) <= 0;
+  const maxStock = Number(product.stock) || 0;
+  const isUnavailable = !product.is_active || maxStock <= 0;
+  const atMaxStock = quantity >= maxStock;
 
   const handleOpenChatPanel = () => {
     if (!user) {
@@ -151,6 +153,7 @@ export default function ProductClient({ product, allProducts }: { product: any, 
         slug: product.id,
         seller_id: product.seller_id,
         unit: product.unit || 'kg',
+        stock: maxStock, // để cart store cap số lượng theo tồn kho
         shop: product.shop ? {
           id: product.shop.id,
           store_name: product.shop.store_name || product.shop.name || '',
@@ -257,16 +260,26 @@ export default function ProductClient({ product, allProducts }: { product: any, 
             <div className="flex items-center border border-gray-300 rounded">
               <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-2 hover:bg-gray-100"><Minus size={14} /></button>
               <input type="text" value={quantity} readOnly className="w-12 text-center text-sm font-medium focus:outline-none" />
-              <button onClick={() => setQuantity(q => q + 1)} className="p-2 hover:bg-gray-100"><Plus size={14} /></button>
+              {/* Cap số lượng theo tồn kho — không cho tăng vượt maxStock */}
+              <button
+                onClick={() => setQuantity(q => Math.min(maxStock || 1, q + 1))}
+                disabled={atMaxStock}
+                className="p-2 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus size={14} />
+              </button>
             </div>
             <span className="text-xs text-gray-500">{product.stock} sản phẩm có sẵn</span>
           </div>
+          {atMaxStock && !isUnavailable && (
+            <p className="text-xs text-orange-600 -mt-4 mb-4 ml-[120px]">Đã đạt số lượng tồn kho tối đa.</p>
+          )}
 
           <div className="flex gap-4">
             <button
               onClick={handleAddToCart}
               disabled={isUnavailable}
-              className="flex-1 bg-green-50 border border-green-600 text-green-700 py-3 rounded-md font-bold hover:bg-green-100 transition flex justify-center items-center gap-2"
+              className="flex-1 bg-green-50 border border-green-600 text-green-700 py-3 rounded-md font-bold hover:bg-green-100 transition flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <ShoppingCart size={20} /> Thêm vào giỏ hàng
             </button>

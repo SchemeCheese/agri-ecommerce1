@@ -182,6 +182,9 @@ export default function CartPage() {
                       <h3 className="text-base font-bold text-gray-800 line-clamp-1">{item.name}</h3>
                       <p className="text-sm text-gray-500 mb-1">Đơn vị: {item.unit || 'kg'}</p>
                       <p className="text-green-600 font-bold">{formatCurrency(item.price)}</p>
+                      {Number(item.stock) > 0 && item.quantity >= Number(item.stock) && (
+                        <p className="text-xs text-orange-600 mt-1">Đã đạt tồn kho tối đa ({Number(item.stock)})</p>
+                      )}
                     </div>
                     <div className="flex items-center justify-between w-full sm:w-auto gap-6">
                       <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
@@ -192,9 +195,11 @@ export default function CartPage() {
                           <Minus size={14} />
                         </button>
                         <span className="w-10 text-center font-bold text-gray-800 text-sm">{item.quantity}</span>
+                        {/* Chặn tăng vượt tồn kho — disable khi đã chạm stock (store cũng cap lại) */}
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-200 text-gray-600 transition"
+                          disabled={Number(item.stock) > 0 && item.quantity >= Number(item.stock)}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-200 text-gray-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Plus size={14} />
                         </button>

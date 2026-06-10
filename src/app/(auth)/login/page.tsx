@@ -18,6 +18,9 @@ function LoginContent() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [selectedRole, setSelectedRole] = useState<'BUYER' | 'SELLER'>('BUYER');
   const [loading, setLoading] = useState(false);
+  // Tài khoản dual-role (BUYER + SELLER): BE trả tempToken, FE hiện màn CHỌN workspace.
+  // Giữ tempToken + danh sách vai trò sở hữu để gọi selectRole đúng activeRole.
+  const [roleChoice, setRoleChoice] = useState<{ tempToken: string; allowedRoles: string[] } | null>(null);
 
   // Điều hướng theo activeRole đã được BE cấp:
   //  - ADMIN  → /admin/dashboard (vào thẳng trang quản trị)
@@ -31,15 +34,31 @@ function LoginContent() {
     setTimeout(() => router.push(landingPathFor(u.activeRole)), 1000);
   };
 
-  // Tài khoản sở hữu CẢ buyer + seller: vào thẳng workspace MUA HÀNG (không hỏi
-  // chọn vai trò). Nút "Chuyển sang Bán hàng" đã có sẵn ở Header để đổi qua /dashboard.
+  // Tài khoản sở hữu CẢ buyer + seller → KHÔNG tự chọn vai trò. Hiện màn chọn
+  // workspace; khi user chọn, gọi BE selectRole để phát token với đúng activeRole.
   const resolveOutcome = async (outcome: Awaited<ReturnType<typeof login>>) => {
     if (outcome.requiresRoleSelection) {
-      const u = await selectRole(outcome.tempToken, 'BUYER');
-      if (u) finishWithUser(u);
+      setRoleChoice({ tempToken: outcome.tempToken, allowedRoles: outcome.allowedRoles });
+      setLoading(false);
       return;
     }
     finishWithUser(outcome.user);
+  };
+
+  // User chọn workspace ở màn role-selection → BE phát token mới với activeRole tương ứng.
+  const handlePickRole = async (role: 'BUYER' | 'SELLER') => {
+    if (!roleChoice) return;
+    setLoading(true);
+    try {
+      const u = await selectRole(roleChoice.tempToken, role);
+      if (u) {
+        setRoleChoice(null);
+        finishWithUser(u);
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Không thể chọn vai trò. Vui lòng đăng nhập lại.', 'error');
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,6 +100,52 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex bg-white font-sans">
       {ToastNode}
+
+      {/* MÀN CHỌN WORKSPACE cho tài khoản dual-role (BUYER + SELLER) */}
+      {roleChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-5">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900">Chọn không gian làm việc</h3>
+              <p className="mt-1 text-sm text-gray-500">Tài khoản của bạn có cả vai trò Người mua và Người bán.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handlePickRole('BUYER')}
+                className="flex items-center gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-green-600 hover:bg-green-50 transition disabled:opacity-60"
+              >
+                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700"><User size={20} /></span>
+                <span className="text-left">
+                  <span className="block font-bold text-gray-900">Người mua</span>
+                  <span className="block text-xs text-gray-500">Mua hàng, thanh toán, đánh giá</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handlePickRole('SELLER')}
+                className="flex items-center gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-green-600 hover:bg-green-50 transition disabled:opacity-60"
+              >
+                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 text-orange-700"><Store size={20} /></span>
+                <span className="text-left">
+                  <span className="block font-bold text-gray-900">Người bán</span>
+                  <span className="block text-xs text-gray-500">Quản lý sản phẩm, đơn hàng, doanh thu</span>
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => { setRoleChoice(null); setLoading(false); }}
+              className="w-full text-sm text-gray-500 hover:text-gray-700 transition"
+            >
+              Huỷ
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* --- CỘT TRÁI: ẢNH --- */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-green-900">

@@ -4,6 +4,7 @@ import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/ui/Toast';
 import api from '@/lib/axios';
 import { Container } from '@/components/ui/Container';
 import { 
@@ -32,7 +33,8 @@ export default function CheckoutPage() {
 
 function CheckoutPageInner() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, switchRole } = useAuth();
+  const { show: showToast, ToastNode } = useToast();
   const { carts, activeUserId, clearCart, removeItems } = useCartStore();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,13 +53,18 @@ function CheckoutPageInner() {
   const [momoSimBusy, setMomoSimBusy] = useState(false);
   const [momoStatusMsg, setMomoStatusMsg] = useState<string>('');
 
-  // Poll trạng thái thanh toán MoMo mỗi 3s. Khi BE flip Payment.status (do IPN
+  // Poll trạng thái thanh toán MoMo mỗi 4s. Khi BE flip Payment.status (do IPN
   // thật hoặc DEV simulator), clear interval + redirect sang /payment/success
-  // hoặc /payment/failed.
+  // hoặc /payment/failed. Có TRẦN số lần poll (~5 phút) để không poll vô hạn nếu
+  // IPN không về (an toàn cả khi BE đã miễn throttle cho endpoint này).
   useEffect(() => {
     if (!pendingOrderId) return;
     setMomoStatusMsg('');
+    const POLL_INTERVAL_MS = 4000;
+    const MAX_ATTEMPTS = 75; // 75 × 4s ≈ 5 phút
+    let attempts = 0;
     const intervalId = setInterval(async () => {
+      attempts += 1;
       try {
         const res = await api.get(`/payments/momo/status/${pendingOrderId}`);
         const status = res.data?.paymentStatus;
@@ -67,17 +74,23 @@ function CheckoutPageInner() {
           setPendingOrderId(null);
           setMomoPayment(null);
           router.push(`/payment/success?orderId=${orderId}`);
+          return;
         } else if (status === 'FAILED') {
           clearInterval(intervalId);
           const orderId = pendingOrderId;
           setPendingOrderId(null);
           setMomoPayment(null);
           router.push(`/payment/failed?orderId=${orderId}`);
+          return;
         }
       } catch {
         // network blip — giữ interval, lần tick sau retry
       }
-    }, 3000);
+      if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(intervalId);
+        setMomoStatusMsg('Chưa nhận được xác nhận thanh toán. Nếu đã thanh toán, vui lòng kiểm tra lại đơn hàng sau ít phút.');
+      }
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [pendingOrderId, router]);
 
@@ -216,9 +229,32 @@ function CheckoutPageInner() {
 
   const handlePlaceOrder = async () => {
     if (!address || !phoneNumber) {
-      alert('Vui lòng nhập đầy đủ thông tin giao hàng');
+      showToast('Vui lòng nhập đầy đủ thông tin giao hàng', 'error');
       return;
     }
+
+    // ── Chốt chặn activeRole: checkout YÊU CẦU activeRole = BUYER ──────────────
+    // Nếu đang ở workspace SELLER/ADMIN: tự đổi sang BUYER nếu user sở hữu vai trò
+    // đó (BE phát token mới), ngược lại báo lỗi thân thiện. KHÔNG chỉ đổi route.
+    if (user && user.activeRole && user.activeRole !== 'BUYER') {
+      if (user.is_buyer) {
+        try {
+          const switched = await switchRole('BUYER');
+          if (!switched) {
+            showToast('Không thể chuyển sang chế độ Mua hàng. Vui lòng thử lại.', 'error');
+            return;
+          }
+          showToast('Đã chuyển sang chế độ Mua hàng.', 'success');
+        } catch {
+          showToast('Không thể chuyển sang chế độ Mua hàng. Vui lòng thử lại.', 'error');
+          return;
+        }
+      } else {
+        showToast('Tài khoản người bán không thể đặt hàng. Vui lòng dùng tài khoản người mua.', 'error');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const pmMap: Record<string, string> = { cod: 'COD', momo: 'MOMO' };
@@ -263,7 +299,8 @@ function CheckoutPageInner() {
         router.push('/order-confirmation');
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Lỗi đặt hàng. Hãy thử xóa giỏ và thêm lại sản phẩm.');
+      const msg = error.response?.data?.message || 'Lỗi đặt hàng. Hãy thử xóa giỏ và thêm lại sản phẩm.';
+      showToast(Array.isArray(msg) ? msg[0] : msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -278,6 +315,7 @@ function CheckoutPageInner() {
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
+      {ToastNode}
 
       {momoPayment && (
         <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4">
