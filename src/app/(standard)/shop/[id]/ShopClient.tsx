@@ -128,6 +128,11 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
                 }
               </div>
               <h1 className="mt-3 text-xl font-bold text-gray-900">{shop.name}</h1>
+              {shop.trustStatus === 'WARNING' && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-yellow-50 border border-yellow-300 px-3 py-1 text-xs font-bold text-yellow-700">
+                  ⚠️ Shop đang bị cảnh báo
+                </div>
+              )}
               <div className="flex gap-2 mt-3">
                 <button className="flex items-center gap-1 bg-green-600 text-white px-4 py-1.5 rounded-full text-sm font-medium hover:bg-green-700 transition shadow-sm">
                   <UserPlus size={16} /> Theo dõi

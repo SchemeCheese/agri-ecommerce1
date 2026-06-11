@@ -41,6 +41,7 @@ export default async function ShopDetailPage({ params }: { params: Promise<{ id:
       location: shopInfo.store_address || shopInfo.address || shopInfo.location || '',
       address: shopInfo.address || shopInfo.store_address || '',
       isVerified: shopInfo.isVerified ?? shopInfo.is_verified ?? false,
+      trustStatus: shopInfo.trust_status ?? 'NORMAL',
       rating: shopInfo.avg_rating ?? data.averageRating ?? 5,
       totalSold: shopInfo.total_sales ?? data.totalSold ?? 0,
       responseRate: '100%',
