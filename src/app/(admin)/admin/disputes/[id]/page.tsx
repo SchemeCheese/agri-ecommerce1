@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Gavel, User, Store } from 'lucide-react';
+import { ArrowLeft, Loader2, Gavel, User, Store, Paperclip } from 'lucide-react';
 import {
   adminApi,
   formatVnd,
@@ -11,6 +11,41 @@ import {
   type DisputeOutcome,
   type ResolutionAction,
 } from '@/services/adminApi';
+import { resolveImageUrl } from '@/lib/runtime-config';
+
+// Chỉ những chuỗi trông giống ảnh mới render <img>. Dữ liệu rác (vd "evidence-0",
+// tên file không đường dẫn) sẽ rơi vào fallback "Tệp đính kèm" thay vì ảnh vỡ.
+function isImageLike(src: string): boolean {
+  return /^(https?:\/\/|data:image\/|blob:|\/uploads\/|\/)/i.test(src.trim());
+}
+
+// 1 ô bằng chứng: ảnh có onError fallback; chuỗi không phải ảnh → icon "Tệp đính kèm".
+function EvidenceThumb({ src, index }: { src: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+  const clean = (src ?? '').trim();
+
+  if (!clean || !isImageLike(clean) || failed) {
+    return (
+      <div className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-1 text-slate-400">
+        <Paperclip className="h-5 w-5" />
+        <span className="line-clamp-2 break-all text-center text-[10px]">{clean || 'Tệp đính kèm'}</span>
+      </div>
+    );
+  }
+
+  const url = resolveImageUrl(clean);
+  return (
+    <a href={url} target="_blank" rel="noreferrer">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={`Bằng chứng ${index + 1}`}
+        onError={() => setFailed(true)}
+        className="h-24 w-full rounded-lg object-cover"
+      />
+    </a>
+  );
+}
 
 const OUTCOMES: { value: DisputeOutcome; label: string }[] = [
   { value: 'PENDING', label: 'Chưa kết luận' },
@@ -53,10 +88,7 @@ function EvidencePanel({
       {images.length > 0 ? (
         <div className="mt-3 grid grid-cols-3 gap-2">
           {images.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <a key={i} href={src} target="_blank" rel="noreferrer">
-              <img src={src} alt={`evidence-${i}`} className="h-24 w-full rounded-lg object-cover" />
-            </a>
+            <EvidenceThumb key={i} src={src} index={i} />
           ))}
         </div>
       ) : null}

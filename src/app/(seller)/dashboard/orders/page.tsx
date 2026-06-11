@@ -490,20 +490,13 @@ function SellerOrderDialog({
                   Admin phân xử. Admin là người quyết định hoàn tiền hay không dựa trên bằng chứng 2 phía.
                 </p>
               </div>
+              {/* Người bán CHỈ được gửi giải trình + ảnh đóng gói. Không có nút
+                  "xác nhận thất lạc"/tự quyết lỗi — Admin là người phán quyết duy nhất. */}
               <button
                 onClick={onRespondDispute}
                 className="w-full py-3.5 rounded-xl bg-[#16A34A] hover:bg-green-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all"
               >
-                <ShieldAlert size={18}/> Gửi bằng chứng giải trình
-              </button>
-              <button
-                onClick={onConfirmLost}
-                disabled={actionLoading}
-                className="w-full py-3 rounded-xl border border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70 transition-all"
-              >
-                {actionLoading
-                  ? <Loader2 className="animate-spin" size={18}/>
-                  : <><AlertTriangle size={18}/> Xác nhận thất lạc (chuyển Admin)</>}
+                <ShieldAlert size={18}/> Gửi giải trình & bằng chứng đóng gói
               </button>
             </div>
           )}
