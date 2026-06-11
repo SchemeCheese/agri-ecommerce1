@@ -64,9 +64,11 @@ export default function CartPage() {
     .filter((item) => selectedItems.includes(item.id))
     .reduce((total, item) => total + item.quantity, 0);
 
-  // Group items by shop — ưu tiên shop.id (từ BE), fallback sang seller_id
+  // Group items by shop — ưu tiên shop.id (từ BE), fallback sang seller_id.
+  // Dùng `||` (KHÔNG `??`) để coi chuỗi rỗng '' là thiếu thông tin, tránh gom
+  // nhầm các item khuyết seller vào cùng một nhóm key=''.
   const shopGroups = items.reduce((acc, item) => {
-    const shopId = item.shop?.id ?? item.seller_id ?? 'unknown';
+    const shopId = item.shop?.id || item.seller_id || 'unknown';
     if (!acc[shopId]) acc[shopId] = [];
     acc[shopId].push(item);
     return acc;
@@ -124,7 +126,9 @@ export default function CartPage() {
           {/* List Item — grouped by shop */}
           {Object.entries(shopGroups).map(([shopId, shopItems]) => {
             const shopData = shopItems[0].shop;
-            const shopName = shopData?.store_name ?? `Shop #${shopId.slice(-6)}`;
+            // Fallback thân thiện thay cho "Shop #<id>" khi thiếu tên shop.
+            // store_name có thể là '' (chuỗi rỗng) ⇒ phải .trim() rồi mới so.
+            const shopName = shopData?.store_name?.trim() || 'Gian hàng chưa cập nhật';
             const shopAvatar = shopData?.avatar_url ?? null;
             const allSelected = shopItems.every(i => selectedItems.includes(i.id));
             const shopSubtotal = shopItems.reduce((s, i) => s + i.price * i.quantity, 0);

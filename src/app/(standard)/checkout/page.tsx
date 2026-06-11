@@ -160,7 +160,8 @@ function CheckoutPageInner() {
     seller_id: buyNowSellerId,
     shop: buyNowSellerId ? {
       id:          buyNowSellerId,
-      store_name:  buyNowShopName || `Shop #${buyNowSellerId.slice(-6)}`,
+      // Để trống nếu thiếu tên — phần hiển thị sẽ fallback "Gian hàng chưa cập nhật".
+      store_name:  buyNowShopName || '',
       avatar_url:  null as string | null,
     } : undefined,
     isNegotiated,  // đánh dấu để hiển thị UI
@@ -496,7 +497,7 @@ function CheckoutPageInner() {
             {/* 3. Danh sách đặt hàng theo shop */}
             {Object.entries(shopGroups).map(([shopId, shopItems]) => {
               const shopData = (shopItems[0] as any).shop;
-              const shopName = shopData?.store_name || shopData?.name || 'Shop';
+              const shopName = shopData?.store_name?.trim() || shopData?.name?.trim() || 'Gian hàng chưa cập nhật';
               const shopAvatar = shopData?.avatar_url || shopData?.avatar || null;
               const subtotal = shopItems.reduce((s, i) => s + i.price * i.quantity, 0);
               const sv = getShopVoucher(shopId);
@@ -509,7 +510,7 @@ function CheckoutPageInner() {
                         ? <Image src={shopAvatar} alt={shopName} fill className="object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-gray-400"><Store size={15} /></div>}
                     </div>
-                    <span className="font-bold text-gray-800">{shopName || `Shop #${shopId.slice(-6)}`}</span>
+                    <span className="font-bold text-gray-800">{shopName}</span>
                     <span className="ml-auto text-xs text-gray-400">{shopItems.length} sản phẩm</span>
                   </div>
 
@@ -568,7 +569,7 @@ function CheckoutPageInner() {
               <div className="px-6 py-4 space-y-4 divide-y divide-dashed divide-gray-100">
                 {Object.entries(shopGroups).map(([shopId, shopItems]) => {
                   const shopData = (shopItems[0] as any).shop;
-                  const shopName = shopData?.store_name || shopData?.name || 'Shop';
+                  const shopName = shopData?.store_name?.trim() || shopData?.name?.trim() || 'Gian hàng chưa cập nhật';
                   const subtotal = shopItems.reduce((s, i) => s + i.price * i.quantity, 0);
                   const sv = getShopVoucher(shopId);
                   const discount = sv.discount_amount;
@@ -905,7 +906,7 @@ function CheckoutConfirmDialog({
           <div className="bg-gray-900 rounded-xl p-5 text-white space-y-2">
             {Object.entries(shopGroups).map(([shopId, shopItems]) => {
               const shopData = (shopItems[0] as any).shop;
-              const shopName = shopData?.store_name || shopData?.name || 'Shop';
+              const shopName = shopData?.store_name?.trim() || shopData?.name?.trim() || 'Gian hàng chưa cập nhật';
               const subtotal = shopItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
               const sv = voucherByShop[shopId];
               const discount = sv?.discount_amount ?? 0;

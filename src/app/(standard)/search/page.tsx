@@ -131,6 +131,11 @@ function SearchContent() {
                     rawPrice={product.price}
                     unit={product.unit}
                     sellerId={product.seller_id}
+                    shop={product.seller_id ? {
+                      id: product.seller_id,
+                      store_name: product.store_name || product.shop?.store_name || '',
+                      avatar_url: product.shop?.avatar_url || null,
+                    } : undefined}
                   />
                 ))}
               </div>

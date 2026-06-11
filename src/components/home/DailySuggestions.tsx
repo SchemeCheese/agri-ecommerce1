@@ -51,6 +51,11 @@ export const DailySuggestions = () => {
                 rawPrice={product.price}
                 unit={product.unit}
                 sellerId={product.seller_id}
+                shop={product.shop ? {
+                  id: product.shop.id,
+                  store_name: product.shop.store_name || product.shop.name || '',
+                  avatar_url: product.shop.avatar_url || null,
+                } : undefined}
               />
             ))}
           </div>

@@ -235,7 +235,7 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
       <ProductSection title="Gợi ý cho bạn" subtitle="Sản phẩm được đánh giá cao nhất">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {topRatedProducts.map(p => (
-             <ProductCard key={p.id} {...mapProductToCard(p)} />
+             <ProductCard key={p.id} {...mapProductToCard(p, shop)} />
           ))}
         </div>
       </ProductSection>
@@ -246,7 +246,7 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
       <ProductSection title="Sản phẩm bán chạy" subtitle="Top sản phẩm hot nhất tại shop">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {bestSellingProducts.map(p => (
-             <ProductCard key={p.id} {...mapProductToCard(p)} />
+             <ProductCard key={p.id} {...mapProductToCard(p, shop)} />
           ))}
         </div>
       </ProductSection>
@@ -263,7 +263,7 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
         <ProductSection title="Hàng mới về" subtitle="Sản phẩm mới cập nhật tháng này">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {newArrivals.map(p => (
-               <ProductCard key={p.id} {...mapProductToCard(p)} />
+               <ProductCard key={p.id} {...mapProductToCard(p, shop)} />
             ))}
           </div>
         </ProductSection>
@@ -309,7 +309,7 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
            {filteredAllProducts.length > 0 ? (
              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredAllProducts.map(p => (
-                   <ProductCard key={p.id} {...mapProductToCard(p)} />
+                   <ProductCard key={p.id} {...mapProductToCard(p, shop)} />
                 ))}
              </div>
            ) : (
@@ -432,7 +432,7 @@ const ShopBannerCarousel = ({ banners }: { banners: string[] }) => {
 };
 
 // 4. Helper map data để dùng lại component ProductCard cũ
-const mapProductToCard = (p: any) => ({
+const mapProductToCard = (p: any, shop?: any) => ({
   id: p.id,
   imageUrl: fixImg(p.images?.[0] ?? ''),
   title: p.name,
@@ -441,4 +441,13 @@ const mapProductToCard = (p: any) => ({
   rawPrice: p.price,
   slug: p.id,
   unit: p.unit,
+  // Gắn quan hệ seller/shop để giỏ hàng group đúng và hiện tên shop thật.
+  // Ưu tiên dữ liệu nhúng trong product; fallback sang identity của shop đang xem
+  // (prop `shop` đã chuẩn hoá: dùng .name/.avatar, không phải store_name/avatar_url).
+  sellerId: p.seller_id ?? p.shop?.id ?? shop?.id,
+  shop: {
+    id: p.shop?.id ?? p.seller_id ?? shop?.id,
+    store_name: p.shop?.store_name || shop?.name || '',
+    avatar_url: p.shop?.avatar_url ?? shop?.avatar ?? null,
+  },
 });
