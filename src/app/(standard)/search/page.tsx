@@ -4,7 +4,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
-import { Loader2, Store, Star, Package } from 'lucide-react';
+import { Loader2, Store, Star, Package, Tag } from 'lucide-react';
 import api from '@/lib/axios';
 import { resolveBackendUrl } from '@/lib/runtime-config';
 import { Pagination } from '@/components/ui/pagination';
@@ -18,20 +18,25 @@ function SearchContent() {
   const query = searchParams.get('q') || '';
   const [shops, setShops] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Shops: lấy từ /search (không phân trang). Reset page khi đổi từ khoá.
+  // Shops + Danh mục: lấy từ /search (không phân trang). Reset page khi đổi từ khoá.
   useEffect(() => {
     setPage(1);
     if (!query) {
       setShops([]);
+      setCategories([]);
       return;
     }
     api
       .get('/search', { params: { q: query } })
-      .then((res) => setShops(res.data.shops || []))
+      .then((res) => {
+        setShops(res.data.shops || []);
+        setCategories(res.data.categories || []);
+      })
       .catch((err) => console.error('Shop search error:', err));
   }, [query]);
 
@@ -68,7 +73,7 @@ function SearchContent() {
         <div className="flex justify-center py-20">
           <Loader2 className="animate-spin text-green-600" size={32} />
         </div>
-      ) : totalCount === 0 && query ? (
+      ) : totalCount === 0 && categories.length === 0 && query ? (
         <div className="text-center py-20 bg-white rounded-xl border shadow-sm">
           <Package size={48} className="mx-auto text-gray-300 mb-4" />
           <p className="text-gray-500 text-lg font-medium">Không tìm thấy kết quả nào.</p>
@@ -76,6 +81,29 @@ function SearchContent() {
         </div>
       ) : (
         <div className="space-y-10">
+          {/* === DANH MỤC === */}
+          {categories.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Tag className="text-green-600" size={20} />
+                <h2 className="text-lg font-bold text-gray-900">Danh mục ({categories.length})</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat: any) => (
+                  <Link
+                    key={cat.id}
+                    href={`/search?q=${encodeURIComponent(cat.name)}`}
+                    className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-gray-700 hover:border-green-300 hover:text-green-700 transition-colors shadow-sm"
+                  >
+                    <Tag size={13} className="text-green-500" />
+                    {cat.name}
+                    <span className="text-xs text-gray-400">{cat.product_count} SP</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* === SHOP === */}
           {shops.length > 0 && (
             <section>
