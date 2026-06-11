@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { SellerSidebar } from '@/components/seller/common/SellerSidebar';
 import { SellerHeader } from '@/components/seller/common/SellerHeader';
+import { SellerAIWidget } from '@/components/seller/common/SellerAIWidget';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -41,6 +42,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           {children}
         </div>
       </main>
+      {/* Nút nổi trợ lý AI (mode SELLER) — chỉ hiện trong workspace người bán */}
+      <SellerAIWidget />
     </div>
   );
 }
