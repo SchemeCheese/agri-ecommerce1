@@ -13,6 +13,7 @@ import {
 import { NegotiationQuoteCard } from '@/components/chat/NegotiationQuoteCard';
 import { SellerQuoteForm, SellerProductOption } from '@/components/chat/SellerQuoteForm';
 import { ChatSkeleton } from '@/components/ui/ChatSkeleton';
+import AIAssistantPanel from '@/components/ai/AIAssistantPanel';
 import {
   Message,
   Conversation,
@@ -285,7 +286,7 @@ export default function SellerChatPage() {
         <div className="p-4 border-b border-gray-100">
           <div className="flex gap-2 bg-gray-100 p-1 rounded-lg mb-4">
             <button
-              onClick={() => setActiveTab('buyer')}
+              onClick={() => { setActiveTab('buyer'); setMobileView('list'); }}
               className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${
                 activeTab === 'buyer' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
               }`}
@@ -293,30 +294,36 @@ export default function SellerChatPage() {
               Khách hàng
             </button>
             <button
-              onClick={() => setActiveTab('ai')}
-              className="flex-1 py-1.5 text-sm font-medium rounded-md transition text-gray-400 cursor-not-allowed relative"
-              title="Sắp ra mắt"
-              disabled
+              onClick={() => { setActiveTab('ai'); setMobileView('chat'); }}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition flex items-center justify-center gap-1.5 ${
+                activeTab === 'ai' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+              }`}
             >
-              Trợ lý AI
-              <span className="absolute -top-1 -right-1 text-[9px] bg-yellow-400 text-yellow-900 px-1 rounded font-bold">
-                soon
-              </span>
+              <Bot size={14} /> Trợ lý AI
             </button>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={14} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-green-500"
-            />
-          </div>
+          {activeTab === 'buyer' && (
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={14} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-green-500"
+              />
+            </div>
+          )}
         </div>
 
-        {/* List */}
+        {/* List (chỉ ở tab Khách hàng) */}
+        {activeTab === 'ai' ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+            <Bot size={40} className="text-indigo-300 mb-3" />
+            <p className="text-sm text-gray-500 font-semibold">Trợ lý AI AgriBot</p>
+            <p className="text-xs text-gray-400 mt-1">Hỏi về quản lý shop, giá, tồn kho — khung chat ở bên phải.</p>
+          </div>
+        ) : (
         <div className="flex-1 overflow-y-auto">
           {loadingConvs && (
             <div className="flex justify-center py-12">
@@ -373,13 +380,16 @@ export default function SellerChatPage() {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* ──────────── RIGHT: CHAT AREA ──────────── */}
       <div className={`flex-1 flex flex-col ${
         mobileView === 'list' ? 'hidden md:flex' : 'flex'
       }`}>
-        {!activeConv ? (
+        {activeTab === 'ai' ? (
+          <AIAssistantPanel mode="SELLER" className="flex-1" />
+        ) : !activeConv ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
             <MessageCircle size={48} className="text-gray-200 mb-4" />
             <p className="text-gray-500 font-semibold">Chọn cuộc trò chuyện</p>
