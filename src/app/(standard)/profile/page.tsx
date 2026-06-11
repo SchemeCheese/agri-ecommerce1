@@ -176,7 +176,15 @@ export default function ProfilePage() {
           try {
             const res = await api.post('/reviews/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
             if (res.data?.url) imageUrls.push(res.data.url);
-          } catch {}
+            else throw new Error('no-url');
+          } catch (upErr: any) {
+            // Hiện lỗi thân thiện trong modal (handleSubmit bắt và setError).
+            const msg = upErr?.response?.data?.message;
+            throw new Error(
+              Array.isArray(msg) ? msg[0]
+                : msg || 'Tải ảnh lên thất bại. Vui lòng thử ảnh JPEG/PNG/WEBP dưới 5MB, hoặc gửi đánh giá không kèm ảnh.',
+            );
+          }
         }
       }
       try {
@@ -1301,7 +1309,7 @@ function WriteReviewDialog({
       const payload = Object.values(reviews);
       await onSubmit(order.id, payload);
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Lỗi khi gửi đánh giá. Vui lòng thử lại.');
+      setError(e.response?.data?.message || e.message || 'Lỗi khi gửi đánh giá. Vui lòng thử lại.');
     } finally { setLoading(false); }
   };
 

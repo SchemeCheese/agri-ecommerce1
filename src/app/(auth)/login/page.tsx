@@ -153,6 +153,7 @@ function LoginContent() {
           src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop"
           alt="Agriculture"
           fill
+          sizes="(max-width: 1024px) 0px, 50vw"
           className="object-cover opacity-80"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-12 text-white">

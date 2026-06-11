@@ -51,6 +51,7 @@ export const Promotions = () => {
                 src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1000&auto=format&fit=crop"
                 alt="Rau củ tươi khuyến mãi"
                 fill
+                sizes="(max-width: 768px) 100vw, 42vw"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent md:bg-gradient-to-l opacity-20 md:opacity-100"></div>

@@ -388,6 +388,7 @@ function CheckoutPageInner() {
           src="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop"
           alt="Checkout Banner"
           fill
+          sizes="100vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-black/50" />
