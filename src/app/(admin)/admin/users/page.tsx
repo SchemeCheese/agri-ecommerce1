@@ -6,9 +6,19 @@ import { adminApi, type AdminUser, type Paginated } from '@/services/adminApi';
 import { Pagination } from '@/components/ui/pagination';
 import { UserDetailSheet } from '@/components/admin/UserDetailSheet';
 
+type RoleFilter = 'ALL' | 'BUYER' | 'SELLER' | 'ADMIN';
+
+const ROLE_TABS: { key: RoleFilter; label: string }[] = [
+  { key: 'ALL', label: 'Tất cả' },
+  { key: 'BUYER', label: 'Người mua' },
+  { key: 'SELLER', label: 'Người bán' },
+  { key: 'ADMIN', label: 'Admin' },
+];
+
 export default function AdminUsersPage() {
   const [data, setData] = useState<Paginated<AdminUser> | null>(null);
   const [search, setSearch] = useState('');
+  const [role, setRole] = useState<RoleFilter>('ALL');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -22,11 +32,16 @@ export default function AdminUsersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await adminApi.listUsers({ page, limit: 15, search: search.trim() || undefined }));
+      setData(await adminApi.listUsers({
+        page,
+        limit: 15,
+        search: search.trim() || undefined,
+        role: role === 'ALL' ? undefined : role,
+      }));
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, role]);
 
   useEffect(() => {
     void load();
@@ -64,10 +79,30 @@ export default function AdminUsersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm tên / email / SĐT"
-            className="w-56 text-sm outline-none"
+            placeholder="Tên / email / SĐT / shop / sản phẩm"
+            className="w-72 text-sm outline-none"
           />
         </form>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {ROLE_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => {
+              setRole(tab.key);
+              setPage(1);
+            }}
+            className={`rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+              role === tab.key
+                ? 'border-[#16A34A] bg-green-50 text-[#16A34A]'
+                : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

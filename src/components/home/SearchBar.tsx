@@ -1,7 +1,7 @@
 // src/components/home/SearchBar.tsx
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Filter, Store, X, Loader2 } from 'lucide-react';
+import { BadgeCheck, Search, Filter, Store, X, Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -188,7 +188,10 @@ export const SearchBar = () => {
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800">{shop.store_name}</p>
+                    <p className="flex items-center gap-1 text-sm font-bold text-gray-800">
+                      <span className="truncate">{shop.store_name}</span>
+                      {shop.is_verified ? <BadgeCheck size={14} className="shrink-0 fill-amber-400 text-amber-600" /> : null}
+                    </p>
                     <p className="text-xs text-gray-400">{shop.product_count} sản phẩm · ⭐ {Number(shop.rating ?? 0).toFixed(1)}</p>
                   </div>
                   <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">Shop</span>

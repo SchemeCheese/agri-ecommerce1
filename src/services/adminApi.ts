@@ -181,7 +181,7 @@ export interface ProductDetails {
 export const adminApi = {
   dashboard: () => api.get<DashboardData>('/admin/analytics/dashboard').then((r) => r.data),
 
-  listUsers: (params: { page?: number; limit?: number; search?: string }) =>
+  listUsers: (params: { page?: number; limit?: number; search?: string; role?: 'BUYER' | 'SELLER' | 'ADMIN' }) =>
     api.get<Paginated<AdminUser>>('/admin/users', { params }).then((r) => r.data),
   userDetails: (id: string) => api.get<UserDetails>(`/admin/users/${id}/details`).then((r) => r.data),
   setUserStatus: (id: string, is_active: boolean) =>

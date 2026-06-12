@@ -4,7 +4,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
-import { Loader2, Store, Star, Package, Tag } from 'lucide-react';
+import { BadgeCheck, Loader2, Store, Star, Package, Tag } from 'lucide-react';
 import api from '@/lib/axios';
 import { resolveBackendUrl } from '@/lib/runtime-config';
 import { Pagination } from '@/components/ui/pagination';
@@ -125,7 +125,10 @@ function SearchContent() {
                         <Store size={24} className="text-green-600" />
                       )}
                     </div>
-                    <h3 className="font-bold text-gray-800 text-sm mb-1 group-hover:text-green-700 transition-colors line-clamp-1">{shop.store_name}</h3>
+                    <div className="mb-1 flex max-w-full items-center gap-1">
+                      <h3 className="line-clamp-1 text-sm font-bold text-gray-800 transition-colors group-hover:text-green-700">{shop.store_name}</h3>
+                      {shop.is_verified ? <BadgeCheck size={15} className="shrink-0 fill-amber-400 text-amber-600" /> : null}
+                    </div>
                     <div className="flex items-center gap-1 text-xs text-amber-500 font-semibold">
                       <Star size={11} className="fill-amber-400 text-amber-400" />
                       {Number(shop.rating ?? 0).toFixed(1)}

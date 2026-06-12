@@ -17,6 +17,15 @@ const FILTER_TABS: { key: 'ALL' | ProductStatus; label: string }[] = [
   { key: 'DELETED',      label: 'Đã xóa' },
 ];
 
+const normalizeSearch = (value?: string) =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+
 export default function ProductManagementPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,7 +36,11 @@ export default function ProductManagementPage() {
     fetchProducts, deleteProduct, restockProduct, setProductStatus,
   } = useSellerProducts();
 
-  useEffect(() => { fetchProducts(); }, []); // eslint-disable-line
+  useEffect(() => {
+    fetchProducts();
+    const query = new URLSearchParams(window.location.search).get('search');
+    if (query) setSearchTerm(query);
+  }, []); // eslint-disable-line
 
   // Count per status — used to decorate the tabs and to short-circuit empty states
   const counts = useMemo(() => {
@@ -43,11 +56,18 @@ export default function ProductManagementPage() {
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = normalizeSearch(searchTerm);
     return products.filter((p) => {
       const s = (p.status ?? (p.stock > 0 ? 'ACTIVE' : 'OUT_OF_STOCK')) as ProductStatus;
       if (activeTab === 'ALL' ? s === 'DELETED' : s !== activeTab) return false;
-      return p.name.toLowerCase().includes(q);
+      const searchable = [
+        p.name,
+        p.description,
+        p.category,
+        p.unit,
+        p.origin,
+      ].map(normalizeSearch);
+      return !q || searchable.some((value) => value.includes(q));
     });
   }, [products, searchTerm, activeTab]);
 
@@ -126,7 +146,7 @@ export default function ProductManagementPage() {
           <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
           <input
             type="text"
-            placeholder="Tìm kiếm theo tên, mã SKU..."
+            placeholder="Tìm tên, mô tả, danh mục, đơn vị..."
             className="w-full pl-12 pr-4 py-3 rounded-xl bg-gray-50 border-transparent focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-500/10 transition-all outline-none font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

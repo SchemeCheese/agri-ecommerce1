@@ -72,8 +72,8 @@ export default function AdminProductsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo tên sản phẩm"
-            className="w-56 text-sm outline-none"
+            placeholder="Sản phẩm / danh mục / người bán"
+            className="w-64 text-sm outline-none"
           />
         </form>
       </div>

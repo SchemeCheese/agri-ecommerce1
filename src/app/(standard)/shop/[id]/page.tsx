@@ -30,6 +30,11 @@ export default async function ShopDetailPage({ params }: { params: Promise<{ id:
 
     if (shopProducts.length === 0 && !shopInfo.id) return notFound();
 
+    const rawBanners = Array.isArray(shopInfo.banners) ? shopInfo.banners.slice(0, 3) : [];
+    const banners = rawBanners.length > 0
+      ? rawBanners
+      : [shopInfo.banner_url || shopInfo.banner || shopInfo.cover_url].filter(Boolean).slice(0, 1);
+
     const shop = {
       id,
       name: shopInfo.store_name || shopInfo.name || data.full_name || 'Agri Shop',
@@ -52,7 +57,7 @@ export default async function ShopDetailPage({ params }: { params: Promise<{ id:
       shop_google_maps_url: shopInfo.shop_google_maps_url ?? '',
       shop_maps_open_url: shopInfo.shop_maps_open_url ?? '',
       // ─── Carousel banners (BE caps at 3, paths are relative) ───────────
-      banners: Array.isArray(shopInfo.banners) ? shopInfo.banners.slice(0, 3) : [],
+      banners,
     };
 
     return (

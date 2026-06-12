@@ -375,7 +375,6 @@ function CheckoutPageInner() {
                   disabled={momoSimBusy}
                   className="text-xs text-amber-700 hover:text-amber-900 underline underline-offset-2 disabled:opacity-50"
                 >
-                  {momoSimBusy ? 'Đang giả lập...' : '🧪 DEV: giả lập thanh toán thành công'}
                 </button>
               </div>
             )}
