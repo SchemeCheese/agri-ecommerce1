@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { SellerProduct, ProductStatus } from '@/hooks/useSellerProducts';
+import { resolveImageUrl } from '@/lib/runtime-config';
 import { Edit, Trash2, Eye, Package, Star, PackagePlus, RotateCcw } from 'lucide-react';
 
 interface SellerProductCardProps {
@@ -45,7 +46,7 @@ export const SellerProductCard = ({
       {/* Image Area */}
       <div className="relative aspect-[4/3] w-full bg-gray-100 overflow-hidden">
         <Image
-          src={product.images?.[0] ?? '/placeholder.png'}
+          src={resolveImageUrl(product.images?.[0])}
           alt={product.name}
           fill
           className="object-cover group-hover:scale-110 transition-transform duration-700"

@@ -35,6 +35,8 @@ export interface ProductFormData {
   category_id?: number;
   location?: string;
   image_urls?: string[];
+  retained_image_urls?: string[];
+  replace_images?: boolean;
   /** null = không cho phép thương lượng; số > 0 = ngưỡng tối thiểu */
   min_negotiation_qty?: number | null;
 }
@@ -92,6 +94,8 @@ export function useSellerProducts() {
       formData.append('min_negotiation_qty',
         data.min_negotiation_qty == null ? '' : String(data.min_negotiation_qty));
     data.image_urls?.forEach((url) => formData.append('image_urls', url));
+    data.retained_image_urls?.forEach((url) => formData.append('retained_image_urls', url));
+    if (data.replace_images) formData.append('replace_images', 'true');
     imageFiles?.forEach(f => formData.append('images', f));
 
     const res = await api.patch(`/products/${id}`, formData, {

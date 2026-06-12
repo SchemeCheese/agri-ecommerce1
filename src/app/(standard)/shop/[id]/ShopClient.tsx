@@ -7,7 +7,7 @@ import { ProductCard } from '@/components/home/ProductCard';
 import { formatCurrency } from '@/utils/vi';
 import {
   UserPlus, MessageCircle, Star, MapPin,
-  Store, Clock, Ticket, Filter, LayoutGrid, Tag, CheckCircle2, Loader2
+  Store, Clock, Ticket, Filter, LayoutGrid, Tag, CheckCircle2, Loader2, BadgeCheck
 } from 'lucide-react';
 import {
   Carousel,
@@ -128,6 +128,12 @@ export default function ShopClient({ shop, products }: ShopClientProps) {
                 }
               </div>
               <h1 className="mt-3 text-xl font-bold text-gray-900">{shop.name}</h1>
+              {shop.isVerified && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                  <BadgeCheck size={15} className="fill-amber-400 text-amber-600" />
+                  Shop đã xác minh
+                </div>
+              )}
               {shop.trustStatus === 'WARNING' && (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-yellow-50 border border-yellow-300 px-3 py-1 text-xs font-bold text-yellow-700">
                   ⚠️ Shop đang bị cảnh báo

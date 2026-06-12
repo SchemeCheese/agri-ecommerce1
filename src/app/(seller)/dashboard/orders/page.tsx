@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '@/lib/axios';
 import Image from 'next/image';
+import { resolveImageUrl } from '@/lib/runtime-config';
 import {
   Package, Search, Loader2, X, User, Phone, MapPin,
   Clock, CheckCircle2, Truck, PackageCheck, XCircle,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import { OrderTimeline } from '@/components/ui/OrderTimeline';
 import { DisputeFormModal } from '@/components/dispute/DisputeFormModal';
+import type { DisputeStatus } from '@/services/disputeApi';
 
 /* ─────────────────────── TYPES ─────────────────────── */
 interface OrderItem {
@@ -21,7 +23,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
-  status: 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | 'CANCELLED' | 'ISSUE_REPORTED' | 'FAILED';
+  status: 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | 'CANCELLED' | 'ISSUE_REPORTED' | 'FAILED' | 'RETURNED' | 'REFUND_PENDING' | 'REFUNDED';
   shipping_address: string;
   final_total_price: string;
   created_at: string;
@@ -31,6 +33,7 @@ interface Order {
   buyer: { full_name: string; email: string; phone_number?: string };
   order_items: OrderItem[];
   payments: { status: string; payment_method: string }[];
+  dispute?: { id: string; status: DisputeStatus } | null;
 }
 
 /* ─────────────────────── CONSTANTS ─────────────────────── */
@@ -41,6 +44,9 @@ const TABS = [
   { id: 'SHIPPING',       label: 'Đang giao'         },
   { id: 'COMPLETED',      label: 'Đã giao'           },
   { id: 'ISSUE_REPORTED', label: 'Đang tranh chấp'   },
+  { id: 'REFUND_PENDING', label: 'Chờ hoàn tiền'      },
+  { id: 'REFUNDED',       label: 'Đã hoàn tiền'       },
+  { id: 'RETURNED',       label: 'Đã trả hàng'        },
   { id: 'CANCELLED',      label: 'Đã hủy'            },
   { id: 'FAILED',         label: 'Thất lạc'          },
 ];
@@ -51,6 +57,9 @@ const STATUS_STYLE: Record<string, { text: string; cls: string; icon: React.Reac
   SHIPPING:       { text: 'Đang giao',      cls: 'text-purple-600 bg-purple-50 border border-purple-200',    icon: <Truck size={12}/>           },
   COMPLETED:      { text: 'Đã giao',        cls: 'text-green-600 bg-green-50 border border-green-200',       icon: <PackageCheck size={12}/>    },
   ISSUE_REPORTED: { text: 'Đang tranh chấp', cls: 'text-orange-600 bg-orange-50 border border-orange-200',    icon: <AlertTriangle size={12}/>   },
+  REFUND_PENDING: { text: 'Chờ hoàn tiền',    cls: 'text-amber-700 bg-amber-50 border border-amber-200',       icon: <Clock size={12}/>           },
+  REFUNDED:       { text: 'Đã hoàn tiền',     cls: 'text-teal-700 bg-teal-50 border border-teal-200',          icon: <CheckCircle2 size={12}/>    },
+  RETURNED:       { text: 'Đã trả hàng',      cls: 'text-rose-700 bg-rose-50 border border-rose-200',          icon: <PackageCheck size={12}/>    },
   FAILED:         { text: 'Thất lạc',       cls: 'text-red-600 bg-red-50 border border-red-200',             icon: <XCircle size={12}/>         },
   CANCELLED:      { text: 'Đã hủy',         cls: 'text-red-500 bg-red-50 border border-red-200',             icon: <XCircle size={12}/>         },
 };
@@ -133,6 +142,20 @@ export default function SellerOrdersPage() {
       await fetchOrders();
       setSelectedOrder(null);
     } finally { setActionLoading(false); }
+  };
+
+  const handleDisputeSubmitted = () => {
+    if (!disputeOrderId) return;
+
+    const markEvidenceSubmitted = (order: Order): Order =>
+      order.id === disputeOrderId && order.dispute
+        ? { ...order, dispute: { ...order.dispute, status: 'UNDER_ADMIN_REVIEW' } }
+        : order;
+
+    setOrders((current) => current.map(markEvidenceSubmitted));
+    setSelectedOrder((current) => current ? markEvidenceSubmitted(current) : null);
+    setDisputeOrderId(null);
+    void fetchOrders();
   };
 
   /* Refresh selected order khi danh sách thay đổi */
@@ -298,10 +321,7 @@ export default function SellerOrdersPage() {
         orderId={disputeOrderId ?? ''}
         open={!!disputeOrderId}
         onClose={() => setDisputeOrderId(null)}
-        onSuccess={() => {
-          setDisputeOrderId(null);
-          fetchOrders();
-        }}
+        onSuccess={handleDisputeSubmitted}
       />
 
       {/* Cancel Dialog */}
@@ -334,6 +354,9 @@ function SellerOrderDialog({
   const payMethod = order.payments?.[0]?.payment_method;
   const payStatus = order.payments?.[0]?.status;
   const isCOD     = payMethod === 'COD';
+  const canRespondToDispute = order.dispute?.status === 'PENDING_SELLER_RESPONSE';
+  const sellerEvidenceSubmitted = order.dispute?.status === 'UNDER_ADMIN_REVIEW';
+  const disputeResolved = order.dispute?.status === 'RESOLVED' || order.dispute?.status === 'CLOSED';
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -406,7 +429,7 @@ function SellerOrderDialog({
               {order.order_items.map(item => (
                 <div key={item.id} className="flex gap-3 items-center p-3 rounded-xl border border-gray-100">
                   <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 bg-gray-50">
-                    <Image src={item.product?.images?.[0] ?? '/placeholder.png'} alt={item.product?.name || ''} fill className="object-cover" />
+                    <Image src={resolveImageUrl(item.product?.images?.[0])} alt={item.product?.name || ''} fill className="object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-800 line-clamp-2">{item.product?.name}</p>
@@ -492,12 +515,30 @@ function SellerOrderDialog({
               </div>
               {/* Người bán CHỈ được gửi giải trình + ảnh đóng gói. Không có nút
                   "xác nhận thất lạc"/tự quyết lỗi — Admin là người phán quyết duy nhất. */}
-              <button
-                onClick={onRespondDispute}
-                className="w-full py-3.5 rounded-xl bg-[#16A34A] hover:bg-green-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all"
-              >
-                <ShieldAlert size={18}/> Gửi giải trình & bằng chứng đóng gói
-              </button>
+              {canRespondToDispute ? (
+                <button
+                  onClick={onRespondDispute}
+                  className="w-full py-3.5 rounded-xl bg-[#16A34A] hover:bg-green-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                >
+                  <ShieldAlert size={18}/> Gửi giải trình & bằng chứng đóng gói
+                </button>
+              ) : (
+                <div className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3.5 text-sm font-bold ${
+                  sellerEvidenceSubmitted
+                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                    : disputeResolved
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-500'
+                }`}>
+                  {sellerEvidenceSubmitted ? (
+                    <><CheckCircle2 size={18}/> Đã gửi bằng chứng - Chờ Admin phân xử</>
+                  ) : disputeResolved ? (
+                    <><CheckCircle2 size={18}/> Tranh chấp đã được xử lý</>
+                  ) : (
+                    <><Loader2 size={18}/> Đang tải trạng thái khiếu nại</>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

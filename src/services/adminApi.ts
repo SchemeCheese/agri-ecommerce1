@@ -6,6 +6,8 @@ export interface DashboardData {
   products: { active: number; total: number };
   orders: { total: number; completed: number; byStatus: { status: string; count: number }[] };
   revenue: number;
+  unverifiedShops: number;
+  /** @deprecated Use unverifiedShops. */
   pendingShops: number;
   openDisputes: number;
 }
@@ -43,7 +45,7 @@ export interface AdminProduct {
   category: { id: number; name: string };
 }
 
-export interface PendingShop {
+export interface UnverifiedShop {
   id: string;
   store_name: string | null;
   address: string | null;
@@ -185,7 +187,7 @@ export const adminApi = {
   setUserStatus: (id: string, is_active: boolean) =>
     api.patch(`/admin/users/${id}/status`, { is_active }).then((r) => r.data),
 
-  pendingShops: () => api.get<PendingShop[]>('/admin/shops/pending').then((r) => r.data),
+  unverifiedShops: () => api.get<UnverifiedShop[]>('/admin/shops/unverified').then((r) => r.data),
   verifyShop: (userId: string, is_verified: boolean) =>
     api.patch(`/admin/shops/${userId}/verify`, { is_verified }).then((r) => r.data),
 

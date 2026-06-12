@@ -19,6 +19,9 @@ export function OrderTimeline({ currentStatus, compact = false }: OrderTimelineP
   const isCancelled     = currentStatus === 'CANCELLED';
   const isFailed        = currentStatus === 'FAILED';
   const isIssueReported = currentStatus === 'ISSUE_REPORTED';
+  const isRefundPending = currentStatus === 'REFUND_PENDING';
+  const isRefunded      = currentStatus === 'REFUNDED';
+  const isReturned      = currentStatus === 'RETURNED';
 
   // Map special statuses to a display index
   const displayStatus = isIssueReported ? 'SHIPPING' : currentStatus;
@@ -38,6 +41,33 @@ export function OrderTimeline({ currentStatus, compact = false }: OrderTimelineP
       <div className="flex items-center justify-center gap-3 py-3 px-4 bg-red-50 rounded-xl border border-red-200">
         <XCircle size={18} className="text-red-500 flex-shrink-0" />
         <p className="text-sm font-bold text-red-600">Giao hàng thất bại</p>
+      </div>
+    );
+  }
+
+  if (isRefundPending) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-3 px-4 bg-amber-50 rounded-xl border border-amber-200">
+        <AlertTriangle size={18} className="text-amber-600 flex-shrink-0" />
+        <p className="text-sm font-bold text-amber-700">Đơn hàng đang chờ hoàn tiền</p>
+      </div>
+    );
+  }
+
+  if (isRefunded) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-3 px-4 bg-teal-50 rounded-xl border border-teal-200">
+        <CheckCircle2 size={18} className="text-teal-600 flex-shrink-0" />
+        <p className="text-sm font-bold text-teal-700">Đã hoàn tiền thành công cho người mua</p>
+      </div>
+    );
+  }
+
+  if (isReturned) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-3 px-4 bg-rose-50 rounded-xl border border-rose-200">
+        <PackageCheck size={18} className="text-rose-600 flex-shrink-0" />
+        <p className="text-sm font-bold text-rose-700">Đơn hàng đã được trả lại</p>
       </div>
     );
   }

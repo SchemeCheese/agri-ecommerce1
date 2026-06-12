@@ -63,7 +63,7 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard icon={Users} label="Người mua" value={`${data.users.buyers}`} tone="bg-slate-100 text-slate-600" />
         <StatCard icon={Store} label="Người bán" value={`${data.users.sellers}`} tone="bg-slate-100 text-slate-600" />
-        <StatCard icon={Store} label="Shop chờ duyệt" value={`${data.pendingShops}`} tone="bg-orange-50 text-orange-600" />
+        <StatCard icon={Store} label="Shop chưa xác minh" value={`${data.unverifiedShops}`} tone="bg-amber-50 text-amber-600" />
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5">

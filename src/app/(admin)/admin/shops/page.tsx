@@ -1,28 +1,30 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import axios from 'axios';
 import { Loader2, BadgeCheck, MapPin, ExternalLink } from 'lucide-react';
-import { adminApi, type PendingShop } from '@/services/adminApi';
+import { adminApi, type UnverifiedShop } from '@/services/adminApi';
 
 export default function AdminShopsPage() {
-  const [shops, setShops] = useState<PendingShop[] | null>(null);
+  const [shops, setShops] = useState<UnverifiedShop[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setShops(await adminApi.pendingShops());
+    setShops(await adminApi.unverifiedShops());
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const approve = async (s: PendingShop) => {
+  const verify = async (s: UnverifiedShop) => {
     setBusyId(s.user.id);
     try {
       await adminApi.verifyShop(s.user.id, true);
       await load();
-    } catch (e: any) {
-      alert(e?.response?.data?.message ?? 'Duyệt thất bại.');
+    } catch (error: unknown) {
+      const message = axios.isAxiosError(error) ? error.response?.data?.message : null;
+      alert(typeof message === 'string' ? message : 'Xác minh thất bại.');
     } finally {
       setBusyId(null);
     }
@@ -37,10 +39,15 @@ export default function AdminShopsPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold text-slate-800">Duyệt shop ({shops.length} chờ)</h2>
+      <div>
+        <h2 className="text-lg font-bold text-slate-800">Xác minh shop ({shops.length} chưa xác minh)</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Xác minh chỉ cấp huy hiệu uy tín công khai, không ảnh hưởng quyền bán hàng của shop.
+        </p>
+      </div>
       {shops.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-400">
-          Không có shop nào chờ duyệt 🎉
+          Tất cả shop hiện tại đã được xác minh.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -53,7 +60,7 @@ export default function AdminShopsPage() {
                     {s.user.full_name} · {s.user.email}
                   </p>
                 </div>
-                <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600">Chờ duyệt</span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Chưa xác minh</span>
               </div>
               {s.description ? <p className="mt-3 text-sm text-slate-600">{s.description}</p> : null}
               {s.address ? (
@@ -73,11 +80,11 @@ export default function AdminShopsPage() {
               ) : null}
               <button
                 disabled={busyId === s.user.id}
-                onClick={() => approve(s)}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#16A34A] px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                onClick={() => verify(s)}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"
               >
                 {busyId === s.user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
-                Duyệt & xác thực shop
+                Xác minh shop
               </button>
             </div>
           ))}

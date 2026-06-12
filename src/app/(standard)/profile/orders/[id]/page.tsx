@@ -413,9 +413,21 @@ const StatusBadge = ({ status, paymentStatus }: { status: string; paymentStatus?
     REFUND_PENDING: 'bg-yellow-100 text-yellow-800',
     REFUNDED: 'bg-emerald-100 text-emerald-800',
   };
+  const labelMap: Record<string, string> = {
+    PENDING: 'Chờ xác nhận',
+    CONFIRMED: 'Đã xác nhận',
+    SHIPPING: 'Đang giao hàng',
+    COMPLETED: 'Đã hoàn thành',
+    CANCELLED: 'Đã hủy',
+    ISSUE_REPORTED: 'Đang tranh chấp',
+    FAILED: 'Giao thất bại',
+    RETURNED: 'Đã trả hàng',
+    REFUND_PENDING: 'Chờ hoàn tiền',
+    REFUNDED: 'Đã hoàn tiền',
+  };
   return (
     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${colorMap[status] ?? 'bg-gray-100 text-gray-700'}`}>
-      {status}
+      {labelMap[status] ?? status}
     </span>
   );
 };

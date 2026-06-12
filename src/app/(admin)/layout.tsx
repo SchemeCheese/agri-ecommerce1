@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 const NAV = [
   { href: '/admin/dashboard', label: 'Tổng quan', icon: BarChart3 },
   { href: '/admin/users', label: 'Người dùng', icon: Users },
-  { href: '/admin/shops', label: 'Duyệt shop', icon: Store },
+  { href: '/admin/shops', label: 'Xác minh shop', icon: Store },
   { href: '/admin/products', label: 'Kiểm duyệt SP', icon: PackageSearch },
   { href: '/admin/disputes', label: 'Tranh chấp', icon: Gavel },
 ];

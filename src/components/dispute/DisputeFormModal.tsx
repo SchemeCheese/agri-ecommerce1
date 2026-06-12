@@ -1,9 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { X, Loader2, ImagePlus, ShieldAlert, Trash2 } from 'lucide-react';
-import { disputeApi, uploadEvidenceImage } from '@/services/disputeApi';
+import { disputeApi, uploadEvidenceImage, type DisputeStatus } from '@/services/disputeApi';
 import { resolveImageUrl } from '@/lib/runtime-config';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const message = axios.isAxiosError(error)
+    ? error.response?.data?.message
+    : error instanceof Error
+      ? error.message
+      : null;
+
+  return Array.isArray(message) ? message.join(', ') : typeof message === 'string' ? message : fallback;
+}
 
 interface Props {
   open: boolean;
@@ -22,6 +33,7 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
   const [error, setError] = useState('');
   // seller mode: cần disputeId của đơn
   const [disputeId, setDisputeId] = useState<string | null>(null);
+  const [disputeStatus, setDisputeStatus] = useState<DisputeStatus | null>(null);
   const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
@@ -30,13 +42,17 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
     setImages([]);
     setError('');
     setDisputeId(null);
+    setDisputeStatus(null);
     if (mode === 'seller') {
       setResolving(true);
       disputeApi
         .byOrder(orderId)
         .then((d) => {
           if (!d) setError('Không tìm thấy khiếu nại cho đơn này.');
-          else setDisputeId(d.id);
+          else {
+            setDisputeId(d.id);
+            setDisputeStatus(d.status);
+          }
         })
         .catch(() => setError('Không tải được khiếu nại.'))
         .finally(() => setResolving(false));
@@ -52,8 +68,8 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
         const url = await uploadEvidenceImage(f);
         setImages((prev) => [...prev, url]);
       }
-    } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? 'Upload ảnh thất bại.');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Upload ảnh thất bại.'));
     } finally {
       setUploading(false);
     }
@@ -75,9 +91,8 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
       }
       onSuccess?.();
       onClose();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? 'Gửi thất bại.';
-      setError(Array.isArray(msg) ? msg.join(', ') : String(msg));
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Gửi thất bại.'));
     } finally {
       setSubmitting(false);
     }
@@ -86,6 +101,7 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
   if (!open) return null;
 
   const isBuyer = mode === 'buyer';
+  const sellerCanRespond = mode !== 'seller' || disputeStatus === 'PENDING_SELLER_RESPONSE';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -106,6 +122,27 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
           {resolving ? (
             <div className="flex h-24 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-[#16A34A]" />
+            </div>
+          ) : !sellerCanRespond && disputeStatus ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
+                <p className="font-bold">
+                  {disputeStatus === 'UNDER_ADMIN_REVIEW'
+                    ? 'Người bán đã gửi bằng chứng.'
+                    : 'Khiếu nại này không còn chờ người bán phản hồi.'}
+                </p>
+                <p className="mt-1">
+                  {disputeStatus === 'UNDER_ADMIN_REVIEW'
+                    ? 'Bằng chứng đang chờ Admin xem xét và phân xử.'
+                    : 'Bạn không thể gửi thêm bằng chứng cho khiếu nại này.'}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full rounded-xl bg-slate-900 py-3 font-bold text-white hover:bg-slate-700"
+              >
+                Đóng
+              </button>
             </div>
           ) : (
             <>
@@ -160,7 +197,7 @@ export function DisputeFormModal({ open, onClose, mode, orderId, onSuccess }: Pr
 
               <button
                 onClick={submit}
-                disabled={submitting || uploading || (mode === 'seller' && !disputeId)}
+                disabled={submitting || uploading || (mode === 'seller' && (!disputeId || !sellerCanRespond))}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#16A34A] py-3 font-bold text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}

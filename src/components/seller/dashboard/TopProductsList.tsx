@@ -1,5 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
+import { resolveImageUrl } from '@/lib/runtime-config';
 
 interface ProductRankItem {
   id: string;
@@ -48,7 +49,7 @@ export const TopProductsList = ({ title, icon, items, isLow, loading }: TopProdu
             </span>
             <div className="relative w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
               {p.image ? (
-                <Image src={p.image} alt={p.name} fill className="object-cover" />
+                <Image src={resolveImageUrl(p.image)} alt={p.name} fill className="object-cover" />
               ) : (
                 <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">?</div>
               )}

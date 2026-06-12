@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Container } from '@/components/ui/Container';
-import { ExternalLink, Star, Store, Loader2 } from 'lucide-react';
+import { BadgeCheck, ExternalLink, Star, Store, Loader2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { resolveImageUrl } from '@/lib/runtime-config';
 
@@ -37,6 +37,7 @@ interface TopShopCard {
   rating: number;
   totalSales: number;
   totalReviews: number;
+  isVerified: boolean;
   shop_location_name: string | null;
   address: string | null;
   location: string | null;
@@ -59,6 +60,7 @@ export const TopShops = () => {
           rating: s.avg_rating ?? 5,
           totalSales: s.total_sales ?? 0,
           totalReviews: s.total_reviews ?? 0,
+          isVerified: s.is_verified ?? false,
           // Pass through all location fields — the card renderer applies the priority chain.
           shop_location_name: s.shop_location_name ?? null,
           address: s.address ?? s.store_address ?? null,
@@ -117,6 +119,12 @@ export const TopShops = () => {
                   </div>
                 </div>
                 <h3 className="font-bold text-gray-800 text-base mb-1 group-hover:text-green-700 transition-colors line-clamp-1">{shop.name}</h3>
+                {shop.isVerified ? (
+                  <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                    <BadgeCheck className="h-3.5 w-3.5 fill-amber-400 text-amber-600" />
+                    Đã xác minh
+                  </div>
+                ) : null}
                 <p className="text-xs text-gray-400 mb-1">{shop.totalReviews} đánh giá · {shop.totalSales} đã bán</p>
 
                 {/* Location badge — anchored to Google Maps when the BE resolved a URL.

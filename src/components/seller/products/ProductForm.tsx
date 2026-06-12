@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Upload, X, Save, Loader2, ChevronRight, Handshake, Sparkles } from 'lucide-react';
 import api from '@/lib/axios';
+import { resolveImageUrl } from '@/lib/runtime-config';
 import { useToast } from '@/components/ui/Toast';
 import { SellerProduct, ProductFormData } from '@/hooks/useSellerProducts';
 
@@ -29,6 +30,7 @@ interface ProductSuggestion {
 
 /** Mime types BE chấp nhận cho ảnh. */
 const AI_SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const MAX_PRODUCT_IMAGES = 6;
 
 export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormData>({
@@ -148,8 +150,23 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
-    setNewImageFiles(prev => [...prev, ...files]);
-    setNewImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+
+    const remaining = Math.max(
+      0,
+      MAX_PRODUCT_IMAGES - existingImages.length - imageLinks.length - newImageFiles.length,
+    );
+    const accepted = files.slice(0, remaining);
+    if (accepted.length === 0) {
+      showToast(`Mỗi sản phẩm được tải tối đa ${MAX_PRODUCT_IMAGES} ảnh.`, 'error');
+      e.target.value = '';
+      return;
+    }
+    if (accepted.length < files.length) {
+      showToast(`Chỉ thêm ${accepted.length} ảnh để không vượt quá giới hạn ${MAX_PRODUCT_IMAGES} ảnh.`, 'error');
+    }
+
+    setNewImageFiles(prev => [...prev, ...accepted]);
+    setNewImagePreviews(prev => [...prev, ...accepted.map(f => URL.createObjectURL(f))]);
     e.target.value = '';
     // Magic Fill KHÔNG tự chạy — seller bấm nút "✨ AI Gợi ý từ ảnh" chủ động.
   };
@@ -180,7 +197,16 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
     setSaveError(null);
     setSaving(true);
     try {
-      await onSubmit({ ...formData, image_urls: imageLinks }, newImageFiles);
+      await onSubmit({
+        ...formData,
+        image_urls: imageLinks,
+        ...(initialData
+          ? {
+              retained_image_urls: existingImages,
+              replace_images: true,
+            }
+          : {}),
+      }, newImageFiles);
     } catch (err: any) {
       setSaveError(err.message || 'Lỗi khi lưu sản phẩm');
     } finally {
@@ -188,7 +214,8 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
     }
   };
 
-  const totalImages = existingImages.length + newImagePreviews.length;
+  const totalImages = existingImages.length + newImagePreviews.length + imageLinks.length;
+  const canAddImages = totalImages < MAX_PRODUCT_IMAGES;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -315,7 +342,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
             {/* Ảnh cũ từ server */}
             {existingImages.map((img, idx) => (
               <div key={`existing-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 group">
-                <Image src={img} alt="product" fill className="object-cover" />
+                <Image src={resolveImageUrl(img)} alt="product" fill className="object-cover" />
                 <button
                   onClick={() => removeExistingImage(idx)}
                   className="absolute top-1 right-1 bg-white/80 p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition"
@@ -328,7 +355,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
             {/* Ảnh mới đang chọn */}
             {newImagePreviews.map((src, idx) => (
               <div key={`new-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border-2 border-green-200 group">
-                <Image src={src} alt="new" fill className="object-cover" />
+                <Image src={src} alt="new" fill unoptimized className="object-cover" />
                 <div className="absolute top-1 left-1 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Mới</div>
                 <button
                   onClick={() => removeNewImage(idx)}
@@ -340,11 +367,13 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
             ))}
 
             {/* Upload button */}
-            <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-green-500 hover:bg-green-50 text-gray-400 hover:text-green-600 transition-all">
-              <Upload size={22} />
-              <span className="text-xs font-bold mt-2">Tải ảnh lên</span>
-              <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
-            </label>
+            {canAddImages && (
+              <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-green-500 hover:bg-green-50 text-gray-400 hover:text-green-600 transition-all">
+                <Upload size={22} />
+                <span className="text-xs font-bold mt-2">Tải ảnh lên</span>
+                <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
+              </label>
+            )}
           </div>
 
           {/* ✨ Magic Fill — disabled cho tới khi đã chọn ít nhất 1 ảnh mới */}
@@ -373,7 +402,8 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
                 const parsed = raw
                   .split(/\s|,|\n/)
                   .map((s) => s.trim())
-                  .filter(Boolean);
+                  .filter(Boolean)
+                  .slice(0, Math.max(0, MAX_PRODUCT_IMAGES - existingImages.length - newImageFiles.length));
                 setImageLinks(parsed);
               }}
               rows={3}
@@ -384,7 +414,7 @@ export const ProductForm = ({ initialData, onSubmit }: ProductFormProps) => {
               <div className="grid grid-cols-3 gap-2 mt-3">
                 {imageLinks.map((url, idx) => (
                   <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-green-200">
-                    <Image src={url} alt="link" fill className="object-cover" />
+                    <Image src={resolveImageUrl(url)} alt="link" fill className="object-cover" />
                   </div>
                 ))}
               </div>

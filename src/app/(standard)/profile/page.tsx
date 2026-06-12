@@ -225,6 +225,9 @@ export default function ProfilePage() {
       case 'SHIPPING':  return { text: 'Đang giao',       color: 'text-purple-600 bg-purple-50 border border-purple-200', icon: <Truck size={12}/> };
       case 'COMPLETED': return { text: 'Đã nhận hàng',   color: 'text-green-600 bg-green-50 border border-green-200',    icon: <PackageCheck size={12}/> };
       case 'ISSUE_REPORTED': return { text: 'Đang tranh chấp', color: 'text-orange-600 bg-orange-50 border border-orange-200', icon: <AlertTriangle size={12}/> };
+      case 'REFUND_PENDING': return { text: 'Chờ hoàn tiền', color: 'text-amber-700 bg-amber-50 border border-amber-200', icon: <Clock size={12}/> };
+      case 'REFUNDED':  return { text: 'Đã hoàn tiền',    color: 'text-teal-700 bg-teal-50 border border-teal-200',       icon: <CheckCircle2 size={12}/> };
+      case 'RETURNED':  return { text: 'Đã trả hàng',     color: 'text-rose-700 bg-rose-50 border border-rose-200',       icon: <PackageCheck size={12}/> };
       case 'FAILED':    return { text: 'Giao thất bại',   color: 'text-red-600 bg-red-50 border border-red-200',         icon: <XCircle size={12}/> };
       case 'CANCELLED': return { text: 'Đã hủy',          color: 'text-red-500 bg-red-50 border border-red-200',          icon: <XCircle size={12}/> };
       default:          return { text: 'Đang xử lý',      color: 'text-blue-600 bg-blue-50 border border-blue-200',       icon: <Package size={12}/> };
