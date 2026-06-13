@@ -200,7 +200,7 @@ export const adminApi = {
   listDisputes: (params: { status?: string; page?: number; limit?: number }) =>
     api.get<Paginated<DisputeListItem>>('/admin/disputes', { params }).then((r) => r.data),
   getDispute: (id: string) => api.get<DisputeDetail>(`/admin/disputes/${id}`).then((r) => r.data),
-  adjudicate: (id: string, body: { outcome: DisputeOutcome; action_taken: ResolutionAction; admin_notes?: string }) =>
+  adjudicate: (id: string, body: { outcome: DisputeOutcome; action_taken: ResolutionAction; admin_notes?: string; refund_amount?: number }) =>
     api.post(`/admin/disputes/${id}/adjudicate`, body).then((r) => r.data),
 };
 

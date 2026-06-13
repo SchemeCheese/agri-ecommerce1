@@ -3,7 +3,7 @@ export const SOCKET_BASE_URL = process.env.NEXT_PUBLIC_SOCKET_URL || API_BASE_UR
 
 export const resolveBackendUrl = (url?: string | null) => {
   if (!url) return '';
-  if (url.startsWith('http')) return url;
+  if (/^(https?:\/\/|data:image\/|blob:)/i.test(url)) return url;
   const normalized = url.startsWith('/') ? url : `/${url}`;
   return `${API_BASE_URL}${normalized}`;
 };

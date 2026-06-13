@@ -106,6 +106,7 @@ export default function AdminDisputeDetailPage() {
   const [error, setError] = useState('');
   const [outcome, setOutcome] = useState<DisputeOutcome>('SELLER_FAULT');
   const [action, setAction] = useState<ResolutionAction>('REFUND_BUYER');
+  const [refundAmount, setRefundAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -124,7 +125,12 @@ export default function AdminDisputeDetailPage() {
   const adjudicate = async () => {
     setSubmitting(true);
     try {
-      await adminApi.adjudicate(id, { outcome, action_taken: action, admin_notes: notes.trim() || undefined });
+      await adminApi.adjudicate(id, {
+        outcome,
+        action_taken: action,
+        admin_notes: notes.trim() || undefined,
+        refund_amount: action === 'PARTIAL_REFUND' ? Number(refundAmount) : undefined,
+      });
       await load();
     } catch (e: any) {
       alert(e?.response?.data?.message ?? 'Phán quyết thất bại.');
@@ -250,9 +256,26 @@ export default function AdminDisputeDetailPage() {
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
               />
             </label>
+            {action === 'PARTIAL_REFUND' ? (
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-600">Số tiền hoàn một phần</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, Number(d.order.final_total_price) - 1)}
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  placeholder={`Nhỏ hơn ${formatVnd(d.order.final_total_price)}`}
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Tổng đơn: {formatVnd(d.order.final_total_price)}. Hoàn toàn bộ thì chọn “Hoàn tiền người mua”.
+                </p>
+              </label>
+            ) : null}
             <button
               onClick={adjudicate}
-              disabled={submitting}
+              disabled={submitting || (action === 'PARTIAL_REFUND' && !refundAmount)}
               className="inline-flex items-center gap-2 rounded-xl bg-[#16A34A] px-5 py-2.5 font-bold text-white hover:bg-green-700 disabled:opacity-50"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gavel className="h-4 w-4" />}

@@ -19,7 +19,7 @@ export interface MyDispute {
 export async function uploadEvidenceImage(file: File): Promise<string> {
   const fd = new FormData();
   fd.append('image', file);
-  const res = await api.post('/chat/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  const res = await api.post('/chat/upload-image', fd);
   const url = res.data?.url;
   if (!url) throw new Error('Upload ảnh thất bại.');
   return url as string;
